@@ -1,0 +1,13 @@
+import type { NextConfig } from "next";
+import createNextPWA from "next-pwa";
+
+const withPWA = createNextPWA({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+});
+
+const nextConfig: NextConfig = {
+  output: "standalone",
+};
+
+export default withPWA(nextConfig);
