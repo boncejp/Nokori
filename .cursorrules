@@ -1,0 +1,536 @@
+# Nokori — Cursor AI コーディングルール
+
+このファイルは全Composerセッションに自動適用される。以下のルールを常に遵守すること。
+
+---
+
+## 1. プロジェクト概要
+
+「あといくら使えるか」をリアルタイムに表示する個人向け貯金伴走型Webアプリ。
+詳細な仕様は `docs/requirements.md` / `docs/design.md` を参照。
+このコードはポートフォリオとしてGitHubに公開するため、読みやすさと保守性を最優先とする。
+
+---
+
+## 2. 技術スタック & アーキテクチャ制約
+
+### 必須ルール
+- DB操作には必ず `@supabase/ssr` の `createServerClient` / `createBrowserClient` を使う。**Prismaは使用しない。**
+- サービスロールキーは通常のCRUD操作に使用しない（RLSを迂回するため）。
+- 時刻処理はすべて `date-fns-tz` を使い、タイムゾーンは常に `'Asia/Tokyo'` を明示する。
+- `any` 型の使用を禁止する。型が不明な場合は `unknown` を使い、型ガードで絞り込む。
+- `use client` は必要最小限にとどめる。デフォルトはServer Component。
+
+### 技術スタック
+- Next.js 14+ (App Router) / TypeScript / Tailwind CSS
+- Supabase (PostgreSQL + Auth + RLS)
+- Zustand (クライアント状態管理)
+- Vitest (Unit Test) / Playwright (E2E Test)
+- date-fns + date-fns-tz / @holiday-jp/holiday_jp
+
+---
+
+## 3. ディレクトリ構成
+
+```
+/app
+  /(auth)               # 認証関連ページ
+  /(app)                # 認証後のアプリページ
+    /dashboard
+    /history
+    /settings
+/components
+  /ui                   # 汎用UIパーツ (Button, Input, Toggle 等)
+  /features             # 機能固有コンポーネント (DailyBudgetDisplay 等)
+/lib
+  /logic                # ビジネスロジック（純粋関数・テスト対象）
+  /supabase             # Supabaseクライアント初期化・DBアクセス関数
+  /hooks                # カスタムフック
+  /stores               # Zustandストア
+  /types                # 型定義
+  /constants            # 定数
+/supabase
+  /migrations           # SQLマイグレーション
+/docs                   # 要件定義書・基本設計書
+```
+
+---
+
+## 4. 命名規則
+
+### 変数・定数
+
+```typescript
+// ✅ 何が入っているかを具体的に示す名前をつける
+const remainingBudgetToday = 15_000;
+const daysUntilNextPayday = 8;
+const isOverBudget = remainingBudgetToday < 0;
+
+// ❌ 略語・曖昧な名前は禁止
+const rem = 15_000;
+const d = 8;
+const flag = true;
+```
+
+- ブール値は `is` / `has` / `can` / `should` で始める
+  - 例: `isOverBudget`, `hasReachedGoal`, `canSubmitExpense`
+- 変更されない定数は `SCREAMING_SNAKE_CASE`
+  - 例: `const RESET_HOUR = 3`, `const TIMEZONE = 'Asia/Tokyo'`
+- マジックナンバーは必ず定数化する（`3` ではなく `RESET_HOUR`）
+- 数値リテラルには `_` 区切りを使う（例: `1_000_000`）
+
+### 関数
+
+```typescript
+// ✅ 「動詞 + 目的語」の形で何をするか明示する
+function calculateDailyBudget(profile: Profile, today: Date): number { ... }
+function getLogicalDate(now: Date): Date { ... }
+function redistributeSurplusToFutureDays(surplus: number, remainingDays: number): number { ... }
+function applyUtilityExpenseToBudget(profile: Profile, type: UtilityType, actual: number): number { ... }
+
+// ❌ 動詞なし・汎用すぎる名前は禁止
+function budget(profile: Profile): number { ... }
+function process(data: unknown): void { ... }
+```
+
+### Reactコンポーネント & イベントハンドラ
+
+```typescript
+// コンポーネント名: PascalCase
+export function DailyBudgetDisplay({ remainingToday }: DailyBudgetDisplayProps) { ... }
+
+// イベントハンドラ: handle + イベント名
+const handleExpenseSubmit = () => { ... };
+const handleUtilityTypeChange = (type: UtilityType) => { ... };
+const handleDeleteTransaction = (id: string) => { ... };
+```
+
+### 型・インターフェース
+
+```typescript
+// 型名: PascalCase
+type UtilityType = 'ELECTRICITY' | 'GAS' | 'WATER';
+type SurplusMode = 'STRICT' | 'YUTORI';
+type PaydayRule = 'BEFORE' | 'AFTER' | 'FIXED';
+
+// Props型: ComponentName + Props
+interface DailyBudgetDisplayProps {
+  remainingToday: number;
+  futureDailyBudget: number;
+  isOverBudget: boolean;
+}
+
+// APIレスポンス・非同期処理はResult型でラップ
+type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };
+```
+
+### ファイル名
+
+| 種類 | 規則 | 例 |
+|---|---|---|
+| Reactコンポーネント | `PascalCase.tsx` | `DailyBudgetDisplay.tsx` |
+| ユーティリティ・ロジック | `kebab-case.ts` | `budget-calculator.ts` |
+| カスタムフック | `use-xxx.ts` | `use-daily-budget.ts` |
+| テストファイル | `xxx.test.ts(x)` | `budget-calculator.test.ts` |
+| Zustandストア | `xxx-store.ts` | `budget-store.ts` |
+
+---
+
+## 5. TypeScript ルール
+
+### 型安全性の徹底
+
+```typescript
+// ✅ 関数には必ず戻り値の型を明示する
+function calculateDailyBudget(remainingBudget: number, daysRemaining: number): number {
+  return remainingBudget / daysRemaining;
+}
+
+// ✅ unknown + 型ガードを使う（any は禁止）
+function isProfile(value: unknown): value is Profile {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    'monthly_income' in value
+  );
+}
+
+// ✅ Discriminated Union でステートを表現する（boolean の組み合わせは禁止）
+type BudgetState =
+  | { status: 'loading' }
+  | { status: 'success'; data: BudgetSummary }
+  | { status: 'error'; message: string };
+
+// ❌ boolean フラグの組み合わせでステートを管理しない
+// { isLoading: boolean; isError: boolean; data?: BudgetSummary } はアンチパターン
+```
+
+### その他の制約
+
+- `as`（型アサーション）の使用禁止。型推論か型ガードで解決する。
+- `!`（non-null assertion）の使用禁止。`if` チェックか `??` で解決する。
+- `interface` より `type` を優先する（拡張が必要な場合のみ `interface`）。
+- 変更しない配列・オブジェクトには `readonly` を付ける。
+- `enum` の代わりに `as const` オブジェクトまたは Union 型を使う。
+
+```typescript
+// ✅ as const オブジェクト（enum より型安全）
+const UTILITY_TYPE = {
+  ELECTRICITY: 'ELECTRICITY',
+  GAS: 'GAS',
+  WATER: 'WATER',
+} as const;
+type UtilityType = (typeof UTILITY_TYPE)[keyof typeof UTILITY_TYPE];
+```
+
+---
+
+## 6. React / Next.js ルール
+
+### コンポーネント設計
+
+```typescript
+// ✅ ファイル内の定義順序（この順を守る）
+// 1. imports
+// 2. 型定義（Props）
+// 3. コンポーネント本体
+// 4. サブコンポーネント（あれば）
+// 5. ヘルパー関数（コンポーネント固有のもの）
+
+// ✅ Props は destructuring で受け取る
+function ExpenseInput({ onSubmit, isDisabled }: ExpenseInputProps) { ... }
+
+// ✅ 1コンポーネント = 1責務
+// 100行を超えたら分割を検討する
+```
+
+### カスタムフックへのロジック抽出
+
+```typescript
+// ✅ ロジックはカスタムフックへ。コンポーネントはUIのみ。
+// lib/hooks/use-daily-budget.ts
+export function useDailyBudget() {
+  const profile = useProfileStore((s) => s.profile);
+  const todayTransactions = useTransactionStore((s) => s.todayTransactions);
+
+  const remainingToday = calculateRemainingToday(profile, todayTransactions);
+  const futureDailyBudget = calculateFutureDailyBudget(profile, todayTransactions);
+
+  return {
+    remainingToday,
+    futureDailyBudget,
+    isOverBudget: remainingToday < 0,
+  };
+}
+```
+
+### Server / Client Components
+
+- データ取得・DB操作は Server Component で行う
+- `use client` が必要な場合: ブラウザAPI使用・イベントハンドラ・`useState` / `useEffect` の使用時のみ
+- `useEffect` でのデータフェッチは避ける。Server Component か React Query / SWR を使う。
+- `useEffect` を使う場合は依存配列を省略しない。
+
+---
+
+## 7. 関数の書き方（リーダブルコード準拠）
+
+### 単一責任・小さく保つ
+
+```typescript
+// ✅ 1関数1仕事。組み合わせで複雑な処理を実現する
+function getLogicalDate(now: Date): Date { ... }
+function daysUntilNextPayday(from: Date, profile: Profile): number { ... }
+function calculateDailyBudget(remainingBudget: number, daysRemaining: number): number { ... }
+
+// ❌ 1関数に複数の仕事を詰め込まない
+function calculateBudgetAndSaveAndNotify(profile: Profile): void { ... }
+```
+
+### 早期リターン（ガード節）で深いネストを避ける
+
+```typescript
+// ✅ 異常系を先に弾き、メインロジックをフラットに保つ
+function applyUtilityExpenseToBudget(
+  profile: Profile,
+  utilityType: UtilityType,
+  actualAmount: number
+): number {
+  if (actualAmount < 0) {
+    throw new Error(`支出金額は0以上である必要があります: ${actualAmount}`);
+  }
+
+  const estimate = getUtilityEstimate(profile, utilityType);
+  const budgetDelta = estimate - actualAmount;
+
+  return budgetDelta;
+}
+
+// ❌ else で深いネストを作らない
+function applyUtilityExpenseToBudget(...): number {
+  if (actualAmount >= 0) {
+    if (UTILITY_TYPES.includes(utilityType)) {
+      // ネストが深くなるほど読みにくい
+    }
+  }
+  return 0;
+}
+```
+
+### 説明変数で計算の意図を明示する
+
+```typescript
+// ✅ 中間変数に名前をつけて「何を計算しているか」を伝える
+function calculateFutureDailyBudget(
+  remainingCycleBudget: number,
+  todayTotalSpending: number,
+  daysRemainingExcludingToday: number
+): number {
+  const budgetAfterTodaySpending = remainingCycleBudget - todayTotalSpending;
+  const futureDailyBudget = budgetAfterTodaySpending / daysRemainingExcludingToday;
+  return futureDailyBudget;
+}
+
+// ❌ 意図が読めない1行計算は書かない
+function calc(r: number, t: number, d: number): number {
+  return (r - t) / d;
+}
+```
+
+### 引数の設計
+
+```typescript
+// ✅ 引数が3つ以上になる場合はオブジェクトにまとめる
+interface CalculateBudgetParams {
+  remainingCycleBudget: number;
+  todayTotalSpending: number;
+  daysRemaining: number;
+  includeToday: boolean;
+}
+function calculateBudget(params: CalculateBudgetParams): number { ... }
+
+// ❌ 位置依存の引数を並べない（順番を間違えやすい）
+function calculateBudget(remaining: number, today: number, days: number, include: boolean): number { ... }
+```
+
+---
+
+## 8. コメントの書き方
+
+**「何をしているか（What）」はコードで表現する。コメントは「なぜ（Why）」を書く場所。**
+
+```typescript
+// ❌ コードをそのまま説明するコメントは不要
+// amountをtotalに加算する
+total += amount;
+
+// ✅ 非自明なビジネスルールや設計上の意図を説明する
+// 27:00ルール: 深夜0〜2時台の入力は前日扱いとする。
+// 深夜の行動を自然に前日の支出として集計するための設計上の決定。
+if (jstHours < RESET_HOUR) {
+  return subDays(startOfDay(jst), 1);
+}
+
+// ✅ なぜ「こうしなかった」かを書くと特に価値が高い
+// 余剰金を全額翌日にスライドさせると日次予算が不均一になるため、
+// 次の給料日までの残り日数で等分して分配する設計を採用している。
+const dailySurplusDistribution = surplus / remainingDays;
+```
+
+- JSDoc（`/** */`）は `lib/logic/` 配下の公開関数にのみ付与する
+- `// TODO:` / `// FIXME:` コメントはコードに残さず、GitHub Issueとして管理する
+- コメントアウトされたコードは残さない（Gitの履歴で追える）
+
+---
+
+## 9. エラーハンドリング
+
+### Result型で型安全にエラーを扱う
+
+```typescript
+// ✅ 非同期処理はResult型を返し、呼び出し側が必ずエラーを処理する
+type Result<T, E = Error> =
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+async function fetchProfile(userId: string): Promise<Result<Profile>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error) return { success: false, error: new Error(error.message) };
+  return { success: true, data };
+}
+
+// ✅ 呼び出し側で明示的にエラー処理
+const result = await fetchProfile(userId);
+if (!result.success) {
+  // エラー処理
+  return;
+}
+const profile = result.data; // ここでは型安全にProfileとして扱える
+```
+
+### エラーメッセージの書き方
+
+```typescript
+// ✅ 何が問題で、何を確認すべきかをメッセージに含める
+throw new Error(`給料日の計算に失敗しました。payday: ${profile.payday}, rule: ${profile.payday_rule}`);
+
+// ❌ 文脈のないメッセージ
+throw new Error('Error');
+```
+
+- `console.log` はデバッグ後に必ず削除する。残す場合は `console.error` または `console.warn` を使う。
+- ユーザー向けエラーメッセージは日本語で、原因と取るべき行動を明記する。
+
+---
+
+## 10. Supabase / データアクセス層
+
+```typescript
+// ✅ DB操作は /lib/supabase/ 配下に集約する。
+// コンポーネントやストアから直接 supabase.from() を呼ばない。
+
+// lib/supabase/transactions.ts
+export async function insertTransaction(
+  supabase: SupabaseClient,
+  payload: InsertTransaction
+): Promise<Result<Transaction>> {
+  const logicalDate = getLogicalDate(new Date());
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert({ ...payload, logical_date: logicalDate })
+    .select()
+    .single();
+
+  if (error) return { success: false, error: new Error(error.message) };
+  return { success: true, data };
+}
+```
+
+- RLSによる認可はDB層に任せる。アプリ層で `WHERE user_id = xxx` を手動追加しない。
+- Supabaseの生成型（`database.types.ts`）を必ず使い、テーブル構造をハードコードしない。
+- `select('*')` は避け、必要なカラムのみ指定する。
+
+---
+
+## 11. Zustandストア
+
+```typescript
+// ✅ ストアは関心事ごとに1ファイル
+// lib/stores/budget-store.ts
+
+interface BudgetStore {
+  // State: 名詞で命名
+  remainingToday: number;
+  futureDailyBudget: number;
+  isOverBudget: boolean;
+
+  // Actions: 動詞 + 名詞で命名
+  deductExpense: (amount: number) => void;
+  recalculateFutureBudget: () => void;
+  reset: () => void;
+}
+
+// ✅ 楽観的更新: 先行更新 → 失敗時にロールバック
+deductExpense: (amount) => {
+  const snapshot = get().remainingToday; // ロールバック用にスナップショットを保存
+
+  set((state) => ({ remainingToday: state.remainingToday - amount })); // 先行更新
+
+  insertTransaction(supabase, { amount }).then((result) => {
+    if (!result.success) {
+      set({ remainingToday: snapshot }); // 失敗時にロールバック
+    }
+  });
+},
+```
+
+- `useStore()` でストア全体を購読しない。`useStore((s) => s.xxx)` でセレクタを使い不要な再レンダリングを防ぐ。
+
+---
+
+## 12. テストの書き方
+
+### Vitest（Unit Test）
+
+```typescript
+// ✅ describe でグループ化し、it で「条件 → 期待結果」を明示する
+describe('getLogicalDate', () => {
+  it('JST 02:59:59 のとき、前日の日付を返す', () => {
+    const input = new Date('2024-01-15T17:59:59Z'); // UTC = JST 02:59:59
+    expect(getLogicalDate(input)).toEqual(new Date('2024-01-14'));
+  });
+
+  it('JST 03:00:00 のとき、当日の日付を返す', () => {
+    const input = new Date('2024-01-15T18:00:00Z'); // UTC = JST 03:00:00
+    expect(getLogicalDate(input)).toEqual(new Date('2024-01-15'));
+  });
+});
+
+// ✅ AAA パターン（Arrange / Act / Assert）で構造化する
+it('STRICTモードで余剰金が全額貯金に追加される', () => {
+  // Arrange
+  const profile = createMockProfile({ surplus_mode: 'STRICT', current_total_savings: 100_000 });
+  const surplus = 5_000;
+
+  // Act
+  const result = processMonthlyReset(profile, surplus);
+
+  // Assert
+  expect(result.current_total_savings).toBe(105_000);
+});
+```
+
+- テスト対象の関数と同じディレクトリに `xxx.test.ts` を配置する
+- モックは最小限にとどめる。ロジック関数は純粋関数として設計し、モック不要にする。
+
+### Playwright（E2E Test）
+
+```typescript
+// ✅ セレクタは data-testid 属性を使う（CSSクラスやテキストに依存しない）
+await page.getByTestId('expense-amount-input').fill('1500');
+await page.getByTestId('submit-expense-button').click();
+
+// ✅ テスト間で状態を共有しない（各テストは独立して実行できること）
+test.beforeEach(async ({ page }) => {
+  await seedTestData(); // テストごとにDBをリセット
+});
+```
+
+---
+
+## 13. Gitコミット規約
+
+[Conventional Commits](https://www.conventionalcommits.org/) に準拠する。
+
+```
+<type>(<scope>): <subject>
+
+type:
+  feat      新機能の追加
+  fix       バグ修正
+  refactor  機能変更を伴わないリファクタリング
+  test      テストの追加・修正
+  chore     ビルド設定・ツール・依存関係の変更
+  docs      ドキュメントのみの変更
+  style     コードの意味に影響しない変更（フォーマット等）
+  perf      パフォーマンス改善
+
+例:
+  feat(dashboard): 支出入力後の翌日予算リアルタイム再計算を実装
+  fix(logic): JST 03:00:00 の論理日付が前日になるバグを修正
+  test(budget): calculateDailyBudget の月またぎ境界値テストを追加
+  refactor(store): budget-store の楽観的更新を共通 util に抽出
+  chore: Vitest と Playwright の初期設定を追加
+```
+
+- 1コミット = 1論理的変更（機能追加とリファクタリングを混ぜない）
+- `git add .` による一括コミットは避け、`git add -p` で変更を意図ごとに分けてステージングする
