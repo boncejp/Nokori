@@ -45,3 +45,21 @@ export async function upsertOwnProfile(
 
   return { success: true, data };
 }
+
+export async function deleteOwnProfileById(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<Result<Profile | null>> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", userId)
+    .select(PROFILE_SELECT_COLUMNS)
+    .maybeSingle();
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data };
+}

@@ -3,10 +3,13 @@
 import { create } from "zustand";
 
 import {
+  calculateDaysUntilNextPayday,
   applyUtilityDeltaToRemainingBudget,
   calculateDailyBudgetFuture,
+  calculateNextPayday,
   calculateDailyBudgetToday,
   calculateRemainingToday,
+  getLogicalDate,
   type UtilityType,
 } from "@/lib/logic/budget-logic";
 
@@ -72,6 +75,12 @@ type DashboardStoreState = {
   readonly isSubmitting: boolean;
   readonly submitErrorMessage: string;
   hydrate: (payload: DashboardHydration) => void;
+  applyProfileSettings: (payload: {
+    readonly remainingCycleBudget: number;
+    readonly payday: number;
+    readonly paydayRule: "BEFORE" | "AFTER" | "FIXED";
+    readonly utilityEstimates: UtilityEstimateMap;
+  }) => void;
   submitTransaction: (input: SubmitTransactionInput) => Promise<SubmitTransactionResult>;
   deleteCommittedTransaction: (transactionId: string) => void;
 };
@@ -218,6 +227,26 @@ function rollbackToPreviousState(
   });
 }
 
+function parseLogicalDateString(logicalDate: string): Date {
+  const date = new Date(`${logicalDate}T00:00:00+09:00`);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`論理日付の形式が不正です: ${logicalDate}`);
+  }
+  return date;
+}
+
+function resolveLogicalTodayDate(logicalToday: string): Date {
+  if (logicalToday.length === 0) {
+    return getLogicalDate(new Date());
+  }
+
+  try {
+    return parseLogicalDateString(logicalToday);
+  } catch {
+    return getLogicalDate(new Date());
+  }
+}
+
 export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
   logicalToday: "",
   remainingCycleBudget: 0,
@@ -245,6 +274,40 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       transactions: payload.transactions,
       ...computed,
       submitErrorMessage: "",
+    });
+  },
+  applyProfileSettings: (payload) => {
+    const previousState = get();
+    const logicalTodayDate = resolveLogicalTodayDate(previousState.logicalToday);
+    const nextPayday = calculateNextPayday({
+      fromDate: logicalTodayDate,
+      payday: payload.payday,
+      paydayRule: payload.paydayRule,
+    });
+    const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
+      fromDate: logicalTodayDate,
+      nextPayday,
+      includeToday: true,
+    });
+    const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
+      fromDate: logicalTodayDate,
+      nextPayday,
+      includeToday: false,
+    });
+    const computed = calculateComputedMetrics({
+      remainingCycleBudget: payload.remainingCycleBudget,
+      daysUntilNextPaydayIncludingToday,
+      daysUntilNextPaydayExcludingToday,
+      utilityEstimates: payload.utilityEstimates,
+      transactions: previousState.transactions,
+    });
+
+    set({
+      remainingCycleBudget: payload.remainingCycleBudget,
+      daysUntilNextPaydayIncludingToday,
+      daysUntilNextPaydayExcludingToday,
+      utilityEstimates: payload.utilityEstimates,
+      ...computed,
     });
   },
   submitTransaction: async (input) => {

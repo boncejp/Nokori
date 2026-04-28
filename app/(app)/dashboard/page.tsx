@@ -78,6 +78,12 @@ export default async function DashboardPage() {
       >
         履歴を見る
       </Link>
+      <Link
+        href="/settings"
+        className="inline-flex w-fit rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
+      >
+        設定を開く
+      </Link>
       <form action={logoutAction}>
         <button
           type="submit"

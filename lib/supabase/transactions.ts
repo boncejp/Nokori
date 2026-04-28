@@ -116,3 +116,15 @@ export async function deleteOwnTransactionById(
 
   return { success: true, data };
 }
+
+export async function deleteAllOwnTransactions(
+  supabase: SupabaseClient<Database>,
+): Promise<Result<number>> {
+  const { data, error } = await supabase.from("transactions").delete().select("id");
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data: data.length };
+}

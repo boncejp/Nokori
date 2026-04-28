@@ -107,9 +107,14 @@ export function HistoryClient({
           <h1 className="text-2xl font-semibold">History</h1>
           <p className="text-sm text-zinc-600">当月の論理日ベース支出履歴</p>
         </div>
-        <Link href="/dashboard" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-          Dashboardへ戻る
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
+            Dashboardへ戻る
+          </Link>
+          <Link href="/settings" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
+            Settings
+          </Link>
+        </div>
       </div>
 
       {initialHistoryErrorMessage ? (
