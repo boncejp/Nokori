@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // next-pwa が生成するサービスワーカー
+    "public/sw.js",
+    "public/workbox*.js",
   ]),
 ]);
 

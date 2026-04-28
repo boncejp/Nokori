@@ -29,7 +29,23 @@ supabase start
 supabase status
 ```
 
-5. アプリを起動します。
+5. マイグレーションを適用します（初回およびスキーマ変更後）。
+
+```bash
+supabase db reset
+```
+
+※ データを残したまま進める場合は `supabase migration up` を使います。
+
+6. TypeScript 型を生成します（スキーマ変更のたびに再実行）。
+
+```bash
+npm run gen:types
+```
+
+生成先は `lib/types/database.ts` です。
+
+7. アプリを起動します。
 
 ```bash
 npm run dev
