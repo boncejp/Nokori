@@ -1,0 +1,245 @@
+import * as holidayJp from "@holiday-jp/holiday_jp";
+import {
+  addDays,
+  addMonths,
+  differenceInCalendarDays,
+  endOfMonth,
+  startOfDay,
+  subDays,
+} from "date-fns";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
+
+export const TIMEZONE = "Asia/Tokyo";
+export const RESET_HOUR = 3;
+
+export type PaydayRule = "BEFORE" | "AFTER" | "FIXED";
+export type SurplusMode = "STRICT" | "YUTORI";
+export type UtilityType = "ELECTRICITY" | "GAS" | "WATER";
+
+type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
+
+function toJstStartOfDay(date: Date): Date {
+  const jstDate = toZonedTime(date, TIMEZONE);
+  const jstStart = startOfDay(jstDate);
+  return fromZonedTime(jstStart, TIMEZONE);
+}
+
+function toJstDateString(date: Date): string {
+  const jstDate = toZonedTime(date, TIMEZONE);
+  const year = String(jstDate.getFullYear());
+  const month = String(jstDate.getMonth() + 1).padStart(2, "0");
+  const day = String(jstDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createJstDate(year: number, monthIndex: number, dayOfMonth: number): Date {
+  const month = String(monthIndex + 1).padStart(2, "0");
+  const day = String(dayOfMonth).padStart(2, "0");
+  return fromZonedTime(`${year}-${month}-${day}T00:00:00`, TIMEZONE);
+}
+
+function isHolidayInJapan(date: Date): boolean {
+  // 実行環境のローカルTZに依存しないよう、JSTの年月日に正規化して祝日判定する。
+  const jstDate = toZonedTime(date, TIMEZONE);
+  const normalizedJstDate = createJstDate(
+    jstDate.getFullYear(),
+    jstDate.getMonth(),
+    jstDate.getDate(),
+  );
+  return holidayJp.between(normalizedJstDate, normalizedJstDate).length > 0;
+}
+
+function isWeekendOrHoliday(date: Date): boolean {
+  const jstDate = toZonedTime(date, TIMEZONE);
+  const day = jstDate.getDay();
+  const isWeekend = day === 0 || day === 6;
+  return isWeekend || isHolidayInJapan(date);
+}
+
+function adjustPaydayByRule(basePayday: Date, paydayRule: PaydayRule): Date {
+  if (paydayRule === "FIXED") {
+    return basePayday;
+  }
+
+  let adjusted = basePayday;
+  while (isWeekendOrHoliday(adjusted)) {
+    adjusted = paydayRule === "BEFORE" ? subDays(adjusted, 1) : addDays(adjusted, 1);
+  }
+  return adjusted;
+}
+
+/**
+ * 27:00 (JST 03:00) ルールに基づき論理日付を返す。
+ */
+export function getLogicalDate(now: Date): Date {
+  const jstNow = toZonedTime(now, TIMEZONE);
+  const jstStart = startOfDay(jstNow);
+  if (jstNow.getHours() < RESET_HOUR) {
+    return subDays(jstStart, 1);
+  }
+  return jstStart;
+}
+
+/**
+ * 次回給料日までの日数を返す。
+ */
+export function calculateDaysUntilNextPayday(params: {
+  readonly fromDate: Date;
+  readonly nextPayday: Date;
+  readonly includeToday: boolean;
+}): number {
+  const { fromDate, nextPayday, includeToday } = params;
+  const fromJstStart = startOfDay(toZonedTime(fromDate, TIMEZONE));
+  const paydayJstStart = startOfDay(toZonedTime(nextPayday, TIMEZONE));
+  const days = differenceInCalendarDays(paydayJstStart, fromJstStart);
+
+  if (days < 0) {
+    throw new Error("nextPayday must be on or after fromDate");
+  }
+
+  return includeToday ? days + 1 : days;
+}
+
+/**
+ * 当日予算 D_today を算出する。
+ */
+export function calculateDailyBudgetToday(params: {
+  readonly remainingCycleBudget: number;
+  readonly daysUntilNextPaydayIncludingToday: number;
+}): number {
+  const { remainingCycleBudget, daysUntilNextPaydayIncludingToday } = params;
+  if (daysUntilNextPaydayIncludingToday <= 0) {
+    throw new Error("daysUntilNextPaydayIncludingToday must be greater than 0");
+  }
+  return remainingCycleBudget / daysUntilNextPaydayIncludingToday;
+}
+
+/**
+ * 今日の残予算 remainingToday を算出する。
+ */
+export function calculateRemainingToday(params: {
+  readonly dailyBudgetToday: number;
+  readonly todaySpent: number;
+}): number {
+  const { dailyBudgetToday, todaySpent } = params;
+  return dailyBudgetToday - todaySpent;
+}
+
+/**
+ * 翌日以降予算 D_future を算出する。
+ */
+export function calculateDailyBudgetFuture(params: {
+  readonly remainingCycleBudget: number;
+  readonly todaySpent: number;
+  readonly daysUntilNextPaydayExcludingToday: number;
+}): number {
+  const { remainingCycleBudget, todaySpent, daysUntilNextPaydayExcludingToday } = params;
+  const budgetAfterTodaySpending = remainingCycleBudget - todaySpent;
+
+  if (daysUntilNextPaydayExcludingToday < 0) {
+    throw new Error("daysUntilNextPaydayExcludingToday must not be negative");
+  }
+  if (daysUntilNextPaydayExcludingToday === 0) {
+    return budgetAfterTodaySpending;
+  }
+
+  return budgetAfterTodaySpending / daysUntilNextPaydayExcludingToday;
+}
+
+/**
+ * 光熱費実額と概算の差額を返す（正: 予算増 / 負: 予算減）。
+ */
+export function calculateUtilityBudgetDelta(params: {
+  readonly utilityType: UtilityType;
+  readonly actualAmount: number;
+  readonly estimatedByType: UtilityEstimateMap;
+}): number {
+  const { utilityType, actualAmount, estimatedByType } = params;
+  const estimatedAmount = estimatedByType[utilityType];
+  return estimatedAmount - actualAmount;
+}
+
+/**
+ * 光熱費差額を当月残予算に反映する。
+ */
+export function applyUtilityDeltaToRemainingBudget(params: {
+  readonly remainingBudget: number;
+  readonly utilityDelta: number;
+}): number {
+  const { remainingBudget, utilityDelta } = params;
+  return remainingBudget + utilityDelta;
+}
+
+/**
+ * 次回の給料日を算出する（給料日ルール、土日祝、月末補正を適用）。
+ */
+export function calculateNextPayday(params: {
+  readonly fromDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): Date {
+  const { fromDate, payday, paydayRule } = params;
+  if (payday < 1 || payday > 31) {
+    throw new Error(`payday must be between 1 and 31: ${payday}`);
+  }
+
+  const jstNow = toZonedTime(fromDate, TIMEZONE);
+  const year = jstNow.getFullYear();
+  const month = jstNow.getMonth();
+
+  const currentMonthEnd = endOfMonth(createJstDate(year, month, 1));
+  const currentMonthLastDay = toZonedTime(currentMonthEnd, TIMEZONE).getDate();
+  const currentMonthDay = Math.min(payday, currentMonthLastDay);
+  const currentMonthBase = createJstDate(year, month, currentMonthDay);
+  const currentMonthPayday = adjustPaydayByRule(currentMonthBase, paydayRule);
+
+  const todayString = toJstDateString(fromDate);
+  const currentPaydayString = toJstDateString(currentMonthPayday);
+  if (todayString <= currentPaydayString) {
+    return toJstStartOfDay(currentMonthPayday);
+  }
+
+  const nextMonthDate = addMonths(createJstDate(year, month, 1), 1);
+  const nextMonthJst = toZonedTime(nextMonthDate, TIMEZONE);
+  const nextYear = nextMonthJst.getFullYear();
+  const nextMonth = nextMonthJst.getMonth();
+  const nextMonthEnd = endOfMonth(createJstDate(nextYear, nextMonth, 1));
+  const nextMonthLastDay = toZonedTime(nextMonthEnd, TIMEZONE).getDate();
+  const nextMonthDay = Math.min(payday, nextMonthLastDay);
+  const nextMonthBase = createJstDate(nextYear, nextMonth, nextMonthDay);
+  const nextMonthPayday = adjustPaydayByRule(nextMonthBase, paydayRule);
+  return toJstStartOfDay(nextMonthPayday);
+}
+
+/**
+ * 給料日リセット時の余剰金処理（STRICT / YUTORI）。
+ */
+export function processMonthlyReset(params: {
+  readonly surplusMode: SurplusMode;
+  readonly currentTotalSavings: number;
+  readonly baseBudget: number;
+  readonly surplus: number;
+}): {
+  readonly nextTotalSavings: number;
+  readonly nextInitialBudget: number;
+} {
+  const { surplusMode, currentTotalSavings, baseBudget, surplus } = params;
+  if (surplus <= 0) {
+    return {
+      nextTotalSavings: currentTotalSavings,
+      nextInitialBudget: baseBudget,
+    };
+  }
+
+  if (surplusMode === "STRICT") {
+    return {
+      nextTotalSavings: currentTotalSavings + surplus,
+      nextInitialBudget: baseBudget,
+    };
+  }
+
+  return {
+    nextTotalSavings: currentTotalSavings,
+    nextInitialBudget: baseBudget + surplus,
+  };
+}
