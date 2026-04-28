@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function HomePage() {
+type AppLayoutProps = Readonly<{
+  children: React.ReactNode;
+}>;
+
+export default async function AppLayout({ children }: AppLayoutProps) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -18,5 +22,5 @@ export default async function HomePage() {
     redirect("/onboarding");
   }
 
-  redirect("/dashboard");
+  return <>{children}</>;
 }
