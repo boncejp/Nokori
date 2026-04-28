@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { endOfMonth, startOfMonth } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 import { getLogicalDate, TIMEZONE, type UtilityType } from "@/lib/logic/budget-logic";
@@ -47,6 +48,29 @@ export async function listTransactionsByLogicalDate(
   return { success: true, data };
 }
 
+export async function listTransactionsByLogicalMonth(
+  supabase: SupabaseClient<Database>,
+  referenceDate: Date,
+): Promise<Result<readonly Transaction[]>> {
+  const jstReferenceDate = toZonedTime(referenceDate, TIMEZONE);
+  const monthStart = toJstDateString(startOfMonth(jstReferenceDate));
+  const monthEnd = toJstDateString(endOfMonth(jstReferenceDate));
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .select(TRANSACTION_SELECT_COLUMNS)
+    .gte("logical_date", monthStart)
+    .lte("logical_date", monthEnd)
+    .order("logical_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data };
+}
+
 export async function insertOwnTransaction(
   supabase: SupabaseClient<Database>,
   userId: string,
@@ -67,6 +91,24 @@ export async function insertOwnTransaction(
     .insert(payload)
     .select(TRANSACTION_SELECT_COLUMNS)
     .single();
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data };
+}
+
+export async function deleteOwnTransactionById(
+  supabase: SupabaseClient<Database>,
+  transactionId: string,
+): Promise<Result<Transaction | null>> {
+  const { data, error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", transactionId)
+    .select(TRANSACTION_SELECT_COLUMNS)
+    .maybeSingle();
 
   if (error) {
     return { success: false, error: new Error(error.message) };

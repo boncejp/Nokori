@@ -7,6 +7,7 @@ import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashb
 
 type DashboardClientProps = {
   readonly initialState: {
+    readonly logicalToday: string;
     readonly remainingCycleBudget: number;
     readonly daysUntilNextPaydayIncludingToday: number;
     readonly daysUntilNextPaydayExcludingToday: number;

@@ -37,6 +37,7 @@ type SubmitTransactionResult =
 type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
 type DashboardHydration = {
+  readonly logicalToday: string;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
   readonly daysUntilNextPaydayExcludingToday: number;
@@ -55,6 +56,7 @@ type DashboardComputedMetrics = {
 };
 
 type DashboardStoreState = {
+  readonly logicalToday: string;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
   readonly daysUntilNextPaydayExcludingToday: number;
@@ -71,6 +73,7 @@ type DashboardStoreState = {
   readonly submitErrorMessage: string;
   hydrate: (payload: DashboardHydration) => void;
   submitTransaction: (input: SubmitTransactionInput) => Promise<SubmitTransactionResult>;
+  deleteCommittedTransaction: (transactionId: string) => void;
 };
 
 const DEFAULT_UTILITY_ESTIMATES: UtilityEstimateMap = {
@@ -216,6 +219,7 @@ function rollbackToPreviousState(
 }
 
 export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
+  logicalToday: "",
   remainingCycleBudget: 0,
   daysUntilNextPaydayIncludingToday: 1,
   daysUntilNextPaydayExcludingToday: 0,
@@ -234,6 +238,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
     const computed = calculateComputedMetrics(payload);
     set({
       remainingCycleBudget: payload.remainingCycleBudget,
+      logicalToday: payload.logicalToday,
       daysUntilNextPaydayIncludingToday: payload.daysUntilNextPaydayIncludingToday,
       daysUntilNextPaydayExcludingToday: payload.daysUntilNextPaydayExcludingToday,
       utilityEstimates: payload.utilityEstimates,
@@ -321,5 +326,21 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
         errorMessage: "通信に失敗しました。ネットワークを確認して再試行してください。",
       };
     }
+  },
+  deleteCommittedTransaction: (transactionId) => {
+    const previousState = get();
+    const nextTransactions = previousState.transactions.filter((transaction) => transaction.id !== transactionId);
+    const nextComputed = calculateComputedMetrics({
+      remainingCycleBudget: previousState.remainingCycleBudget,
+      daysUntilNextPaydayIncludingToday: previousState.daysUntilNextPaydayIncludingToday,
+      daysUntilNextPaydayExcludingToday: previousState.daysUntilNextPaydayExcludingToday,
+      utilityEstimates: previousState.utilityEstimates,
+      transactions: nextTransactions,
+    });
+
+    set({
+      transactions: nextTransactions,
+      ...nextComputed,
+    });
   },
 }));
