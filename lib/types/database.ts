@@ -105,11 +105,7 @@ export type Database = {
     }
     Functions: {
       create_special_transaction_and_decrement_savings: {
-        Args: {
-          p_amount: number
-          p_logical_date: string
-          p_memo: string | null
-        }
+        Args: { p_amount: number; p_logical_date: string; p_memo: string }
         Returns: {
           amount: number
           created_at: string
@@ -119,6 +115,12 @@ export type Database = {
           type: Database["public"]["Enums"]["transaction_type"]
           user_id: string
           utility_type: Database["public"]["Enums"]["utility_type"] | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
     }
