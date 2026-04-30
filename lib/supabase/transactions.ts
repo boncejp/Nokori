@@ -71,6 +71,30 @@ export async function listTransactionsByLogicalMonth(
   return { success: true, data };
 }
 
+export async function listTransactionsByLogicalDateRange(
+  supabase: SupabaseClient<Database>,
+  params: {
+    readonly fromLogicalDate: Date;
+    readonly toLogicalDate: Date;
+  },
+): Promise<Result<readonly Transaction[]>> {
+  const fromLogicalDateString = toJstDateString(params.fromLogicalDate);
+  const toLogicalDateString = toJstDateString(params.toLogicalDate);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select(TRANSACTION_SELECT_COLUMNS)
+    .gte("logical_date", fromLogicalDateString)
+    .lte("logical_date", toLogicalDateString)
+    .order("logical_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data };
+}
+
 export async function insertOwnTransaction(
   supabase: SupabaseClient<Database>,
   userId: string,
@@ -91,6 +115,29 @@ export async function insertOwnTransaction(
     .insert(payload)
     .select(TRANSACTION_SELECT_COLUMNS)
     .single();
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data };
+}
+
+export async function insertOwnSpecialTransactionAndDecrementSavings(
+  supabase: SupabaseClient<Database>,
+  input: {
+    readonly amount: number;
+    readonly memo: string | null;
+  },
+): Promise<Result<Transaction>> {
+  const logicalDate = getLogicalDate(new Date());
+  const logicalDateString = toJstDateString(logicalDate);
+
+  const { data, error } = await supabase.rpc("create_special_transaction_and_decrement_savings", {
+    p_amount: input.amount,
+    p_memo: input.memo,
+    p_logical_date: logicalDateString,
+  });
 
   if (error) {
     return { success: false, error: new Error(error.message) };

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { createTransactionPersistencePlan } from "@/lib/logic/transaction-persistence";
 import { validateTransactionPayload } from "@/lib/logic/transaction-validation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { insertOwnTransaction } from "@/lib/supabase/transactions";
+import {
+  insertOwnSpecialTransactionAndDecrementSavings,
+  insertOwnTransaction,
+} from "@/lib/supabase/transactions";
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -23,18 +27,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
   }
 
-  const insertResult = await insertOwnTransaction(supabase, user.id, {
-    amount: validationResult.data.amount,
-    memo: validationResult.data.memo,
-    type: validationResult.data.kind === "SPECIAL" ? "SPECIAL" : "NORMAL",
-    utility_type: validationResult.data.kind === "UTILITY" ? validationResult.data.utilityType : null,
+  const persistencePlan = createTransactionPersistencePlan({
+    kind: validationResult.data.kind,
+    utilityType: validationResult.data.utilityType,
   });
+  const insertResult = persistencePlan.shouldUseSpecialAtomicMutation
+    ? await insertOwnSpecialTransactionAndDecrementSavings(supabase, {
+        amount: validationResult.data.amount,
+        memo: validationResult.data.memo,
+      })
+    : await insertOwnTransaction(supabase, user.id, {
+        amount: validationResult.data.amount,
+        memo: validationResult.data.memo,
+        type: persistencePlan.transactionType,
+        utility_type: persistencePlan.utilityType,
+      });
 
   if (!insertResult.success) {
-    return NextResponse.json(
-      { errorMessage: "支出の保存に失敗しました。時間をおいて再試行してください。" },
-      { status: 500 },
-    );
+    const errorMessage = persistencePlan.shouldUseSpecialAtomicMutation
+      ? "特別支出の保存に失敗しました。時間をおいて再試行してください。"
+      : "支出の保存に失敗しました。時間をおいて再試行してください。";
+    return NextResponse.json({ errorMessage }, { status: 500 });
   }
 
   return NextResponse.json({

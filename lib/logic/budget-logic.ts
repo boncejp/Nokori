@@ -243,3 +243,196 @@ export function processMonthlyReset(params: {
     nextInitialBudget: baseBudget + surplus,
   };
 }
+
+/**
+ * 目標日までの残り月数を返す（最小1）。
+ */
+export function calculateRemainingMonthsToTarget(params: {
+  readonly targetDate: Date;
+  readonly referenceDate: Date;
+}): number {
+  const { targetDate, referenceDate } = params;
+  const jstTarget = toZonedTime(targetDate, TIMEZONE);
+  const jstReference = toZonedTime(referenceDate, TIMEZONE);
+  const monthDiff =
+    (jstTarget.getFullYear() - jstReference.getFullYear()) * 12 +
+    (jstTarget.getMonth() - jstReference.getMonth());
+
+  return Math.max(monthDiff + 1, 1);
+}
+
+/**
+ * 貯金目標に対する月次貯金ノルマを算出する。
+ */
+export function calculateMonthlySavingsQuota(params: {
+  readonly targetAmount: number;
+  readonly currentTotalSavings: number;
+  readonly targetDate: Date;
+  readonly referenceDate: Date;
+}): number {
+  const { targetAmount, currentTotalSavings, targetDate, referenceDate } = params;
+  const remainingMonths = calculateRemainingMonthsToTarget({ targetDate, referenceDate });
+  const remainingSavings = targetAmount - currentTotalSavings;
+  const monthlySavingsQuota = remainingSavings / remainingMonths;
+
+  return Math.max(0, monthlySavingsQuota);
+}
+
+/**
+ * 設計4.2に基づく基準サイクル予算を算出する。
+ */
+export function calculateBaseCycleBudget(params: {
+  readonly monthlyIncome: number;
+  readonly fixedCosts: number;
+  readonly estimatedElectricity: number;
+  readonly estimatedGas: number;
+  readonly estimatedWater: number;
+  readonly monthlySavingsQuota: number;
+}): number {
+  const {
+    monthlyIncome,
+    fixedCosts,
+    estimatedElectricity,
+    estimatedGas,
+    estimatedWater,
+    monthlySavingsQuota,
+  } = params;
+  const estimatedUtilitiesTotal = estimatedElectricity + estimatedGas + estimatedWater;
+
+  return monthlyIncome - fixedCosts - estimatedUtilitiesTotal - monthlySavingsQuota;
+}
+
+/**
+ * 次サイクルのremainingCycleBudgetを算出する。
+ */
+export function calculateNextRemainingCycleBudget(params: {
+  readonly isFirstCycle: boolean;
+  readonly initialBudget: number;
+  readonly baseCycleBudget: number;
+  readonly confirmedNormalSpentBeforeToday: number;
+}): number {
+  const { isFirstCycle, initialBudget, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
+  if (isFirstCycle) {
+    return initialBudget;
+  }
+  return baseCycleBudget - confirmedNormalSpentBeforeToday;
+}
+
+/**
+ * 参照日が属するサイクル開始日と次回給料日を返す。
+ */
+export function calculateCycleWindow(params: {
+  readonly referenceDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): {
+  readonly cycleStartDate: Date;
+  readonly nextPaydayDate: Date;
+} {
+  const { referenceDate, payday, paydayRule } = params;
+  const currentMonthPayday = calculatePaydayInMonth({
+    referenceDate,
+    payday,
+    paydayRule,
+    monthOffset: 0,
+  });
+  const previousMonthPayday = calculatePaydayInMonth({
+    referenceDate,
+    payday,
+    paydayRule,
+    monthOffset: -1,
+  });
+  const nextMonthPayday = calculatePaydayInMonth({
+    referenceDate,
+    payday,
+    paydayRule,
+    monthOffset: 1,
+  });
+
+  const referenceDateString = toJstDateString(referenceDate);
+  const currentMonthPaydayString = toJstDateString(currentMonthPayday);
+  if (referenceDateString >= currentMonthPaydayString) {
+    return {
+      cycleStartDate: toJstStartOfDay(currentMonthPayday),
+      nextPaydayDate: toJstStartOfDay(nextMonthPayday),
+    };
+  }
+
+  return {
+    cycleStartDate: toJstStartOfDay(previousMonthPayday),
+    nextPaydayDate: toJstStartOfDay(currentMonthPayday),
+  };
+}
+
+function calculatePaydayInMonth(params: {
+  readonly referenceDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+  readonly monthOffset: number;
+}): Date {
+  const { referenceDate, payday, paydayRule, monthOffset } = params;
+  const jstReferenceDate = toZonedTime(referenceDate, TIMEZONE);
+  const monthReference = addMonths(
+    createJstDate(jstReferenceDate.getFullYear(), jstReferenceDate.getMonth(), 1),
+    monthOffset,
+  );
+  const targetMonth = toZonedTime(monthReference, TIMEZONE);
+  const monthEnd = endOfMonth(createJstDate(targetMonth.getFullYear(), targetMonth.getMonth(), 1));
+  const monthLastDay = toZonedTime(monthEnd, TIMEZONE).getDate();
+  const resolvedPayday = Math.min(payday, monthLastDay);
+  const basePayday = createJstDate(targetMonth.getFullYear(), targetMonth.getMonth(), resolvedPayday);
+
+  return adjustPaydayByRule(basePayday, paydayRule);
+}
+
+/**
+ * 初回サイクル中かどうかを判定する。
+ * 初回サイクル = オンボーディング完了日(論理日付) から最初の給料日前日まで。
+ */
+export function isWithinFirstCycle(params: {
+  readonly onboardingCompletedAt: Date;
+  readonly referenceDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): boolean {
+  const { onboardingCompletedAt, referenceDate, payday, paydayRule } = params;
+  const onboardingLogicalDate = getLogicalDate(onboardingCompletedAt);
+  const firstCandidatePayday = calculateNextPayday({
+    fromDate: onboardingLogicalDate,
+    payday,
+    paydayRule,
+  });
+  const onboardingLogicalDateString = toJstDateString(onboardingLogicalDate);
+  const firstCandidatePaydayString = toJstDateString(firstCandidatePayday);
+  const firstPaydayAfterOnboarding =
+    onboardingLogicalDateString === firstCandidatePaydayString
+      ? calculateNextPayday({
+          fromDate: addDays(firstCandidatePayday, 1),
+          payday,
+          paydayRule,
+        })
+      : firstCandidatePayday;
+  const firstCycleEndDate = subDays(firstPaydayAfterOnboarding, 1);
+  const referenceDateString = toJstDateString(referenceDate);
+  const firstCycleEndDateString = toJstDateString(firstCycleEndDate);
+
+  return (
+    referenceDateString >= onboardingLogicalDateString &&
+    referenceDateString <= firstCycleEndDateString
+  );
+}
+
+/**
+ * 月次リセットを実行すべきか判定する。
+ */
+export function shouldExecuteMonthlyReset(params: {
+  readonly isPayday: boolean;
+  readonly logicalTodayString: string;
+  readonly lastMonthlyResetLogicalDate: string | null;
+}): boolean {
+  const { isPayday, logicalTodayString, lastMonthlyResetLogicalDate } = params;
+  if (!isPayday) {
+    return false;
+  }
+  return lastMonthlyResetLogicalDate !== logicalTodayString;
+}

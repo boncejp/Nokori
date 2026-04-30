@@ -19,6 +19,7 @@ export type Database = {
           fixed_costs: number
           id: string
           initial_budget: number
+          last_monthly_reset_logical_date: string | null
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
@@ -36,6 +37,7 @@ export type Database = {
           fixed_costs: number
           id: string
           initial_budget: number
+          last_monthly_reset_logical_date?: string | null
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
@@ -53,6 +55,7 @@ export type Database = {
           fixed_costs?: number
           id?: string
           initial_budget?: number
+          last_monthly_reset_logical_date?: string | null
           monthly_income?: number
           payday?: number
           payday_rule?: Database["public"]["Enums"]["payday_rule"]
@@ -101,7 +104,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_special_transaction_and_decrement_savings: {
+        Args: {
+          p_amount: number
+          p_logical_date: string
+          p_memo: string | null
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          id: string
+          logical_date: string
+          memo: string | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          utility_type: Database["public"]["Enums"]["utility_type"] | null
+        }
+      }
     }
     Enums: {
       payday_rule: "BEFORE" | "AFTER" | "FIXED"

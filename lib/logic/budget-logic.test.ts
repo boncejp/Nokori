@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
   applyUtilityDeltaToRemainingBudget,
+  calculateBaseCycleBudget,
+  calculateCycleWindow,
   calculateDailyBudgetFuture,
   calculateDailyBudgetToday,
   calculateDaysUntilNextPayday,
+  calculateMonthlySavingsQuota,
+  calculateNextRemainingCycleBudget,
+  calculateRemainingMonthsToTarget,
   calculateNextPayday,
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
   getLogicalDate,
+  isWithinFirstCycle,
   processMonthlyReset,
+  shouldExecuteMonthlyReset,
 } from "./budget-logic";
 
 function formatJstDate(date: Date): string {
@@ -190,5 +197,218 @@ describe("processMonthlyReset", () => {
     });
     expect(result.nextTotalSavings).toBe(100_000);
     expect(result.nextInitialBudget).toBe(85_000);
+  });
+});
+
+describe("monthly savings quota", () => {
+  it("残り月数で月次ノルマを再計算する", () => {
+    const remainingMonths = calculateRemainingMonthsToTarget({
+      targetDate: new Date("2026-12-31T00:00:00+09:00"),
+      referenceDate: new Date("2026-04-15T12:00:00+09:00"),
+    });
+    const quota = calculateMonthlySavingsQuota({
+      targetAmount: 1_000_000,
+      currentTotalSavings: 400_000,
+      targetDate: new Date("2026-12-31T00:00:00+09:00"),
+      referenceDate: new Date("2026-04-15T12:00:00+09:00"),
+    });
+
+    expect(remainingMonths).toBe(9);
+    expect(quota).toBeCloseTo(66_666.666, 2);
+  });
+
+  it("目標超過時はノルマを0で下限固定する", () => {
+    const quota = calculateMonthlySavingsQuota({
+      targetAmount: 300_000,
+      currentTotalSavings: 350_000,
+      targetDate: new Date("2026-05-01T00:00:00+09:00"),
+      referenceDate: new Date("2026-04-15T00:00:00+09:00"),
+    });
+
+    expect(quota).toBe(0);
+  });
+});
+
+describe("next remaining cycle budget", () => {
+  it("初回サイクルはinitial_budgetをそのまま使う", () => {
+    const result = calculateNextRemainingCycleBudget({
+      isFirstCycle: true,
+      initialBudget: 120_000,
+      baseCycleBudget: 95_000,
+      confirmedNormalSpentBeforeToday: 12_000,
+    });
+
+    expect(result).toBe(120_000);
+  });
+
+  it("2回目以降は設計4.2の式で算出する", () => {
+    const monthlySavingsQuota = calculateMonthlySavingsQuota({
+      targetAmount: 900_000,
+      currentTotalSavings: 450_000,
+      targetDate: new Date("2026-10-31T00:00:00+09:00"),
+      referenceDate: new Date("2026-04-15T00:00:00+09:00"),
+    });
+    const baseCycleBudget = calculateBaseCycleBudget({
+      monthlyIncome: 300_000,
+      fixedCosts: 80_000,
+      estimatedElectricity: 8_000,
+      estimatedGas: 5_000,
+      estimatedWater: 4_000,
+      monthlySavingsQuota,
+    });
+    const result = calculateNextRemainingCycleBudget({
+      isFirstCycle: false,
+      initialBudget: 150_000,
+      baseCycleBudget,
+      confirmedNormalSpentBeforeToday: 40_000,
+    });
+
+    expect(baseCycleBudget).toBeCloseTo(138_714.285, 2);
+    expect(result).toBeCloseTo(98_714.285, 2);
+  });
+});
+
+describe("calculateCycleWindow", () => {
+  it("給料日当日は当日をサイクル開始日として返す", () => {
+    const result = calculateCycleWindow({
+      referenceDate: new Date("2026-04-24T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(formatJstDate(result.cycleStartDate)).toBe("2026-04-24");
+    expect(formatJstDate(result.nextPaydayDate)).toBe("2026-05-24");
+  });
+
+  it("給料日前日は前月給料日がサイクル開始になる", () => {
+    const result = calculateCycleWindow({
+      referenceDate: new Date("2026-04-23T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(formatJstDate(result.cycleStartDate)).toBe("2026-03-24");
+    expect(formatJstDate(result.nextPaydayDate)).toBe("2026-04-24");
+  });
+});
+
+describe("isWithinFirstCycle", () => {
+  it("初回当日は初回サイクル内として判定される", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      referenceDate: new Date("2026-04-10T15:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("初回中日も初回サイクル内として判定される", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      referenceDate: new Date("2026-04-15T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("初回最終日(最初の給料日前日)は初回サイクル内として判定される", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      referenceDate: new Date("2026-04-23T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("2回目初日(最初の給料日)は初回サイクル外として判定される", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      referenceDate: new Date("2026-04-24T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("27:00ルールでオンボーディング日を論理日付として扱う", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-10T02:00:00+09:00"),
+      referenceDate: new Date("2026-04-09T12:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("オンボーディング論理日が給料日当日でも初回サイクルは空にならない", () => {
+    const duringFirstCycle = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-24T12:00:00+09:00"),
+      referenceDate: new Date("2026-05-10T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(duringFirstCycle).toBe(true);
+  });
+
+  it("オンボーディング論理日が給料日当日の場合は次回給料日当日にfalseになる", () => {
+    const result = isWithinFirstCycle({
+      onboardingCompletedAt: new Date("2026-04-24T12:00:00+09:00"),
+      referenceDate: new Date("2026-05-24T09:00:00+09:00"),
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+
+    expect(result).toBe(false);
+  });
+});
+
+describe("shouldExecuteMonthlyReset", () => {
+  it("給料日かつ未実行日の場合は実行する", () => {
+    const result = shouldExecuteMonthlyReset({
+      isPayday: true,
+      logicalTodayString: "2026-05-24",
+      lastMonthlyResetLogicalDate: null,
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it("同日2回目アクセスでは実行しない", () => {
+    const result = shouldExecuteMonthlyReset({
+      isPayday: true,
+      logicalTodayString: "2026-05-24",
+      lastMonthlyResetLogicalDate: "2026-05-24",
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("給料日でなければ実行しない", () => {
+    const result = shouldExecuteMonthlyReset({
+      isPayday: false,
+      logicalTodayString: "2026-05-20",
+      lastMonthlyResetLogicalDate: null,
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it("給料日の他更新が先に発生しても専用日付が未設定なら実行する", () => {
+    const result = shouldExecuteMonthlyReset({
+      isPayday: true,
+      logicalTodayString: "2026-05-24",
+      lastMonthlyResetLogicalDate: null,
+    });
+
+    expect(result).toBe(true);
   });
 });

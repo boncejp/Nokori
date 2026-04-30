@@ -1,12 +1,43 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { subDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 import { DashboardClient } from "@/components/features/DashboardClient";
-import { calculateDaysUntilNextPayday, calculateNextPayday, getLogicalDate } from "@/lib/logic/budget-logic";
+import {
+  calculateBaseCycleBudget,
+  calculateCycleWindow,
+  calculateDaysUntilNextPayday,
+  calculateMonthlySavingsQuota,
+  calculateNextRemainingCycleBudget,
+  getLogicalDate,
+  isWithinFirstCycle,
+  shouldExecuteMonthlyReset,
+  processMonthlyReset,
+  TIMEZONE,
+  type UtilityType,
+} from "@/lib/logic/budget-logic";
+import {
+  applyMonthlyResetForLogicalDate,
+  fetchProfileByUserId,
+} from "@/lib/supabase/profiles";
+import {
+  listTransactionsByLogicalDate,
+  listTransactionsByLogicalDateRange,
+} from "@/lib/supabase/transactions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { fetchProfileByUserId } from "@/lib/supabase/profiles";
-import { listTransactionsByLogicalDate } from "@/lib/supabase/transactions";
+import type { Tables } from "@/lib/types/database";
+
+type Profile = Tables<"profiles">;
+type Transaction = Tables<"transactions">;
+
+type ResolvedDashboardCycle = {
+  readonly profile: Profile;
+  readonly logicalToday: Date;
+  readonly logicalTodayString: string;
+  readonly nextPayday: Date;
+  readonly remainingCycleBudget: number;
+};
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
@@ -22,26 +53,23 @@ export default async function DashboardPage() {
   if (!profileResult.success) {
     redirect("/onboarding");
   }
-  const profile = profileResult.data;
 
-  const logicalToday = getLogicalDate(new Date());
-  const logicalTodayString = toJstDateString(logicalToday);
-  const nextPayday = calculateNextPayday({
-    fromDate: logicalToday,
-    payday: profile.payday,
-    paydayRule: profile.payday_rule,
+  const resolvedCycle = await resolveDashboardCycle({
+    supabase,
+    userId: user.id,
+    profile: profileResult.data,
   });
   const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday,
+    fromDate: resolvedCycle.logicalToday,
+    nextPayday: resolvedCycle.nextPayday,
     includeToday: true,
   });
   const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday,
+    fromDate: resolvedCycle.logicalToday,
+    nextPayday: resolvedCycle.nextPayday,
     includeToday: false,
   });
-  const transactionsResult = await listTransactionsByLogicalDate(supabase, logicalToday);
+  const transactionsResult = await listTransactionsByLogicalDate(supabase, resolvedCycle.logicalToday);
   const transactions = transactionsResult.success ? transactionsResult.data : [];
   const initialTransactionsErrorMessage = transactionsResult.success
     ? null
@@ -59,14 +87,14 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-semibold">Dashboard</h1>
       <DashboardClient
         initialState={{
-          logicalToday: logicalTodayString,
-          remainingCycleBudget: profile.initial_budget,
+          logicalToday: resolvedCycle.logicalTodayString,
+          remainingCycleBudget: resolvedCycle.remainingCycleBudget,
           daysUntilNextPaydayIncludingToday,
           daysUntilNextPaydayExcludingToday,
           utilityEstimates: {
-            ELECTRICITY: profile.estimated_electricity,
-            GAS: profile.estimated_gas,
-            WATER: profile.estimated_water,
+            ELECTRICITY: resolvedCycle.profile.estimated_electricity,
+            GAS: resolvedCycle.profile.estimated_gas,
+            WATER: resolvedCycle.profile.estimated_water,
           },
           transactions: transactions.map((transaction) => ({ ...transaction, isOptimistic: false })),
           initialTransactionsErrorMessage,
@@ -97,9 +125,203 @@ export default async function DashboardPage() {
 }
 
 function toJstDateString(date: Date): string {
-  const jstDate = toZonedTime(date, "Asia/Tokyo");
+  const jstDate = toZonedTime(date, TIMEZONE);
   const year = String(jstDate.getFullYear());
   const month = String(jstDate.getMonth() + 1).padStart(2, "0");
   const day = String(jstDate.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+async function resolveDashboardCycle(params: {
+  readonly supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  readonly userId: string;
+  readonly profile: Profile;
+}): Promise<ResolvedDashboardCycle> {
+  const logicalToday = getLogicalDate(new Date());
+  const logicalTodayString = toJstDateString(logicalToday);
+  const cycleWindow = calculateCycleWindow({
+    referenceDate: logicalToday,
+    payday: params.profile.payday,
+    paydayRule: params.profile.payday_rule,
+  });
+  const isPayday = toJstDateString(logicalToday) === toJstDateString(cycleWindow.cycleStartDate);
+  const shouldRunMonthlyReset = shouldExecuteMonthlyReset({
+    isPayday,
+    logicalTodayString,
+    lastMonthlyResetLogicalDate: params.profile.last_monthly_reset_logical_date,
+  });
+
+  let profile = params.profile;
+  if (shouldRunMonthlyReset) {
+    const monthlyResetProfileResult = await executeMonthlyReset({
+      supabase: params.supabase,
+      userId: params.userId,
+      profile,
+      logicalToday,
+      logicalTodayString,
+    });
+    if (monthlyResetProfileResult.success) {
+      profile = monthlyResetProfileResult.data;
+    }
+  }
+
+  const refreshedCycleWindow = calculateCycleWindow({
+    referenceDate: logicalToday,
+    payday: profile.payday,
+    paydayRule: profile.payday_rule,
+  });
+  const confirmedSpendResult = await calculateConfirmedNormalSpendBeforeToday({
+    supabase: params.supabase,
+    profile,
+    logicalToday,
+    cycleStartDate: refreshedCycleWindow.cycleStartDate,
+  });
+  const monthlySavingsQuota = calculateMonthlySavingsQuota({
+    targetAmount: profile.target_amount,
+    currentTotalSavings: profile.current_total_savings,
+    targetDate: new Date(`${profile.target_date}T00:00:00+09:00`),
+    referenceDate: logicalToday,
+  });
+  const baseCycleBudget = calculateBaseCycleBudget({
+    monthlyIncome: profile.monthly_income,
+    fixedCosts: profile.fixed_costs,
+    estimatedElectricity: profile.estimated_electricity,
+    estimatedGas: profile.estimated_gas,
+    estimatedWater: profile.estimated_water,
+    monthlySavingsQuota,
+  });
+  const remainingCycleBudget = calculateNextRemainingCycleBudget({
+    isFirstCycle: isWithinFirstCycle({
+      onboardingCompletedAt: new Date(profile.created_at),
+      referenceDate: logicalToday,
+      payday: profile.payday,
+      paydayRule: profile.payday_rule,
+    }),
+    initialBudget: profile.initial_budget,
+    baseCycleBudget,
+    confirmedNormalSpentBeforeToday: confirmedSpendResult,
+  });
+
+  return {
+    profile,
+    logicalToday,
+    logicalTodayString,
+    nextPayday: refreshedCycleWindow.nextPaydayDate,
+    remainingCycleBudget,
+  };
+}
+
+async function executeMonthlyReset(params: {
+  readonly supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  readonly userId: string;
+  readonly profile: Profile;
+  readonly logicalToday: Date;
+  readonly logicalTodayString: string;
+}): Promise<{ success: true; data: Profile } | { success: false }> {
+  const previousCycleEndDate = subDays(params.logicalToday, 1);
+  const previousCycleStartDate = calculateCycleWindow({
+    referenceDate: previousCycleEndDate,
+    payday: params.profile.payday,
+    paydayRule: params.profile.payday_rule,
+  }).cycleStartDate;
+  const previousCycleTransactionsResult = await listTransactionsByLogicalDateRange(params.supabase, {
+    fromLogicalDate: previousCycleStartDate,
+    toLogicalDate: previousCycleEndDate,
+  });
+
+  if (!previousCycleTransactionsResult.success) {
+    return { success: false };
+  }
+
+  const previousCycleConfirmedSpend = calculateConfirmedNormalSpent(previousCycleTransactionsResult.data, {
+    ELECTRICITY: params.profile.estimated_electricity,
+    GAS: params.profile.estimated_gas,
+    WATER: params.profile.estimated_water,
+  });
+  const monthlySavingsQuota = calculateMonthlySavingsQuota({
+    targetAmount: params.profile.target_amount,
+    currentTotalSavings: params.profile.current_total_savings,
+    targetDate: new Date(`${params.profile.target_date}T00:00:00+09:00`),
+    referenceDate: params.logicalToday,
+  });
+  const baseCycleBudget = calculateBaseCycleBudget({
+    monthlyIncome: params.profile.monthly_income,
+    fixedCosts: params.profile.fixed_costs,
+    estimatedElectricity: params.profile.estimated_electricity,
+    estimatedGas: params.profile.estimated_gas,
+    estimatedWater: params.profile.estimated_water,
+    monthlySavingsQuota,
+  });
+  const surplus = params.profile.initial_budget - previousCycleConfirmedSpend;
+  const monthlyResetResult = processMonthlyReset({
+    surplusMode: params.profile.surplus_mode,
+    currentTotalSavings: params.profile.current_total_savings,
+    baseBudget: baseCycleBudget,
+    surplus,
+  });
+  const updatedProfileResult = await applyMonthlyResetForLogicalDate(params.supabase, {
+    userId: params.userId,
+    logicalDate: params.logicalTodayString,
+    nextTotalSavings: monthlyResetResult.nextTotalSavings,
+    nextInitialBudget: monthlyResetResult.nextInitialBudget,
+  });
+
+  if (!updatedProfileResult.success) {
+    return { success: false };
+  }
+
+  if (!updatedProfileResult.data.applied || updatedProfileResult.data.profile === null) {
+    const latestProfileResult = await fetchProfileByUserId(params.supabase, params.userId);
+    if (!latestProfileResult.success) {
+      return { success: false };
+    }
+    return { success: true, data: latestProfileResult.data };
+  }
+
+  return { success: true, data: updatedProfileResult.data.profile };
+}
+
+async function calculateConfirmedNormalSpendBeforeToday(params: {
+  readonly supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  readonly profile: Profile;
+  readonly logicalToday: Date;
+  readonly cycleStartDate: Date;
+}): Promise<number> {
+  const previousDay = subDays(params.logicalToday, 1);
+  const cycleStartString = toJstDateString(params.cycleStartDate);
+  const previousDayString = toJstDateString(previousDay);
+  if (cycleStartString > previousDayString) {
+    return 0;
+  }
+
+  const transactionsResult = await listTransactionsByLogicalDateRange(params.supabase, {
+    fromLogicalDate: params.cycleStartDate,
+    toLogicalDate: previousDay,
+  });
+  if (!transactionsResult.success) {
+    return 0;
+  }
+
+  return calculateConfirmedNormalSpent(transactionsResult.data, {
+    ELECTRICITY: params.profile.estimated_electricity,
+    GAS: params.profile.estimated_gas,
+    WATER: params.profile.estimated_water,
+  });
+}
+
+function calculateConfirmedNormalSpent(
+  transactions: readonly Transaction[],
+  utilityEstimates: Readonly<Record<UtilityType, number>>,
+): number {
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.type !== "NORMAL") {
+      return sum;
+    }
+    if (transaction.utility_type === null) {
+      return sum + transaction.amount;
+    }
+    const estimate = utilityEstimates[transaction.utility_type];
+    return sum - (estimate - transaction.amount);
+  }, 0);
+}
+
