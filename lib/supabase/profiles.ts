@@ -119,3 +119,19 @@ export async function applyMonthlyResetForLogicalDate(
     },
   };
 }
+
+export async function resetOwnDataAtomically(
+  supabase: Pick<SupabaseClient<Database>, "rpc">,
+): Promise<Result<{ readonly deletedTransactionCount: number }>> {
+  const { data, error } = await supabase.rpc("reset_own_data_atomic");
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return {
+    success: true,
+    data: {
+      deletedTransactionCount: data,
+    },
+  };
+}

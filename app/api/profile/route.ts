@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
-  calculateBaseCycleBudget,
-  calculateMonthlySavingsQuota,
   calculateTargetDateFromDuration,
   getLogicalDate,
   isWithinFirstCycle,
+  resolveInitialBudgetForSettingsUpdate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
 import { validateOnboardingPayload } from "@/lib/logic/onboarding-validation";
@@ -56,19 +55,10 @@ export async function PATCH(request: Request) {
     payday: validationResult.data.payday,
     paydayRule: validationResult.data.payday_rule,
   });
-  const monthlySavingsQuota = calculateMonthlySavingsQuota({
-    targetAmount: validationResult.data.target_amount,
-    currentTotalSavings: validationResult.data.current_total_savings,
-    targetDate: recalculatedTargetDate,
-    referenceDate: logicalNow,
-  });
-  const recalculatedBaseCycleBudget = calculateBaseCycleBudget({
-    monthlyIncome: validationResult.data.monthly_income,
-    fixedCosts: validationResult.data.fixed_costs,
-    estimatedElectricity: validationResult.data.estimated_electricity,
-    estimatedGas: validationResult.data.estimated_gas,
-    estimatedWater: validationResult.data.estimated_water,
-    monthlySavingsQuota,
+  const resolvedInitialBudget = resolveInitialBudgetForSettingsUpdate({
+    isWithinFirstCycle: firstCycle,
+    existingInitialBudget: profileResult.data.initial_budget,
+    submittedInitialBudget: validationResult.data.initial_budget,
   });
 
   const profileColumns = {
@@ -83,7 +73,7 @@ export async function PATCH(request: Request) {
     estimated_gas: validationResult.data.estimated_gas,
     estimated_water: validationResult.data.estimated_water,
     surplus_mode: validationResult.data.surplus_mode,
-    initial_budget: firstCycle ? recalculatedBaseCycleBudget : validationResult.data.initial_budget,
+    initial_budget: resolvedInitialBudget,
   };
 
   const updateResult = await upsertOwnProfile(supabase, {

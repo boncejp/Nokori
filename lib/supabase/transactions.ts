@@ -147,15 +147,12 @@ export async function insertOwnSpecialTransactionAndDecrementSavings(
 }
 
 export async function deleteOwnTransactionById(
-  supabase: SupabaseClient<Database>,
+  supabase: Pick<SupabaseClient<Database>, "rpc">,
   transactionId: string,
 ): Promise<Result<Transaction | null>> {
-  const { data, error } = await supabase
-    .from("transactions")
-    .delete()
-    .eq("id", transactionId)
-    .select(TRANSACTION_SELECT_COLUMNS)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("delete_own_transaction_and_restore_savings", {
+    p_transaction_id: transactionId,
+  });
 
   if (error) {
     return { success: false, error: new Error(error.message) };

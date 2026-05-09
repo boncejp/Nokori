@@ -16,6 +16,7 @@ import {
   getLogicalDate,
   isWithinFirstCycle,
   processMonthlyReset,
+  resolveInitialBudgetForSettingsUpdate,
   shouldExecuteMonthlyReset,
 } from "./budget-logic";
 
@@ -319,6 +320,21 @@ describe("next remaining cycle budget", () => {
   });
 });
 
+describe("calculateBaseCycleBudget", () => {
+  it("基準予算が負値になる場合は0にクランプする", () => {
+    const result = calculateBaseCycleBudget({
+      monthlyIncome: 120_000,
+      fixedCosts: 90_000,
+      estimatedElectricity: 20_000,
+      estimatedGas: 10_000,
+      estimatedWater: 8_000,
+      monthlySavingsQuota: 15_000,
+    });
+
+    expect(result).toBe(0);
+  });
+});
+
 describe("calculateCycleWindow", () => {
   it("給料日当日は当日をサイクル開始日として返す", () => {
     const result = calculateCycleWindow({
@@ -461,5 +477,37 @@ describe("shouldExecuteMonthlyReset", () => {
     });
 
     expect(result).toBe(true);
+  });
+});
+
+describe("resolveInitialBudgetForSettingsUpdate", () => {
+  it("初回サイクルで目標金額のみ変更した保存では既存initial_budgetを保持する", () => {
+    const result = resolveInitialBudgetForSettingsUpdate({
+      isWithinFirstCycle: true,
+      existingInitialBudget: 80_000,
+      submittedInitialBudget: 80_000,
+    });
+
+    expect(result).toBe(80_000);
+  });
+
+  it("初回サイクルでもinitial_budgetを明示変更した場合は更新値を採用する", () => {
+    const result = resolveInitialBudgetForSettingsUpdate({
+      isWithinFirstCycle: true,
+      existingInitialBudget: 80_000,
+      submittedInitialBudget: 70_000,
+    });
+
+    expect(result).toBe(70_000);
+  });
+
+  it("初回サイクル外では送信値を採用する", () => {
+    const result = resolveInitialBudgetForSettingsUpdate({
+      isWithinFirstCycle: false,
+      existingInitialBudget: 80_000,
+      submittedInitialBudget: 65_000,
+    });
+
+    expect(result).toBe(65_000);
   });
 });

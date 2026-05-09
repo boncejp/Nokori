@@ -299,7 +299,32 @@ export function calculateBaseCycleBudget(params: {
   } = params;
   const estimatedUtilitiesTotal = estimatedElectricity + estimatedGas + estimatedWater;
 
-  return monthlyIncome - fixedCosts - estimatedUtilitiesTotal - monthlySavingsQuota;
+  const rawBaseCycleBudget = monthlyIncome - fixedCosts - estimatedUtilitiesTotal - monthlySavingsQuota;
+  // 可処分予算の保存値は0未満を許可しない。負債状態は remainingToday 側で表現する。
+  return Math.max(0, rawBaseCycleBudget);
+}
+
+/**
+ * 設定更新時に保存すべき initial_budget を決定する。
+ * 初回サイクル中はオンボーディングで確定した初回開始予算を保持し、
+ * ユーザーが明示的に初回開始予算を変更した場合のみ反映する。
+ */
+export function resolveInitialBudgetForSettingsUpdate(params: {
+  readonly isWithinFirstCycle: boolean;
+  readonly existingInitialBudget: number;
+  readonly submittedInitialBudget: number;
+}): number {
+  const { isWithinFirstCycle, existingInitialBudget, submittedInitialBudget } = params;
+
+  if (!isWithinFirstCycle) {
+    return submittedInitialBudget;
+  }
+
+  if (submittedInitialBudget !== existingInitialBudget) {
+    return submittedInitialBudget;
+  }
+
+  return existingInitialBudget;
 }
 
 /**

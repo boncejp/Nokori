@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { deleteOwnProfileById } from "@/lib/supabase/profiles";
+import { resetOwnDataAtomically } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { deleteAllOwnTransactions } from "@/lib/supabase/transactions";
 
 const REQUIRED_CONFIRM_TEXT = "RESET";
 
@@ -49,25 +48,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
   }
 
-  const deleteTransactionsResult = await deleteAllOwnTransactions(supabase, user.id);
-  if (!deleteTransactionsResult.success) {
+  const resetResult = await resetOwnDataAtomically(supabase);
+  if (!resetResult.success) {
+    console.error("[api/reset-data] atomic reset failed", {
+      userId: user.id,
+      message: resetResult.error.message,
+    });
     return NextResponse.json(
-      { errorMessage: "取引データの削除に失敗しました。時間をおいて再試行してください。" },
-      { status: 500 },
-    );
-  }
-
-  const deleteProfileResult = await deleteOwnProfileById(supabase, user.id);
-  if (!deleteProfileResult.success) {
-    return NextResponse.json(
-      { errorMessage: "プロフィールの初期化に失敗しました。時間をおいて再試行してください。" },
+      {
+        errorMessage:
+          "データ初期化に失敗しました。全件ロールバック済みのため、時間をおいて再試行してください。",
+      },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     success: true,
-    deletedTransactionCount: deleteTransactionsResult.data,
+    deletedTransactionCount: resetResult.data.deletedTransactionCount,
     requiresOnboarding: true,
   });
 }

@@ -132,6 +132,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_own_transaction_and_restore_savings: {
+        Args: { p_transaction_id: string }
+        Returns: {
+          amount: number
+          created_at: string
+          id: string
+          logical_date: string
+          memo: string | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          utility_type: Database["public"]["Enums"]["utility_type"] | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "transactions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reset_own_data_atomic: { Args: never; Returns: number }
     }
     Enums: {
       payday_rule: "BEFORE" | "AFTER" | "FIXED"
