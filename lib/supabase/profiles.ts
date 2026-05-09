@@ -11,7 +11,7 @@ type Result<T, E = Error> =
   | { success: false; error: E };
 
 const PROFILE_SELECT_COLUMNS =
-  "id,target_amount,target_date,current_total_savings,monthly_income,payday,payday_rule,fixed_costs,estimated_electricity,estimated_gas,estimated_water,surplus_mode,initial_budget,last_monthly_reset_logical_date,created_at,updated_at";
+  "id,target_amount,target_date,target_duration_months,target_anchor_logical_date,current_total_savings,monthly_income,payday,payday_rule,fixed_costs,estimated_electricity,estimated_gas,estimated_water,surplus_mode,initial_budget,last_monthly_reset_logical_date,last_salary_cycle_logical_date,created_at,updated_at";
 
 export async function fetchProfileByUserId(
   supabase: SupabaseClient<Database>,

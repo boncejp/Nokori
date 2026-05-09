@@ -24,7 +24,7 @@ function toJstStartOfDay(date: Date): Date {
   return fromZonedTime(jstStart, TIMEZONE);
 }
 
-function toJstDateString(date: Date): string {
+export function toJstDateString(date: Date): string {
   const jstDate = toZonedTime(date, TIMEZONE);
   const year = String(jstDate.getFullYear());
   const month = String(jstDate.getMonth() + 1).padStart(2, "0");
@@ -383,6 +383,30 @@ function calculatePaydayInMonth(params: {
   const basePayday = createJstDate(targetMonth.getFullYear(), targetMonth.getMonth(), resolvedPayday);
 
   return adjustPaydayByRule(basePayday, paydayRule);
+}
+
+/**
+ * 達成期間（か月）に基づき、目標日（給料日）を算出する。
+ * 例: 1か月後 => アンカー日の翌月における給料日。
+ */
+export function calculateTargetDateFromDuration(params: {
+  readonly anchorLogicalDate: Date;
+  readonly durationMonths: number;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): Date {
+  const { anchorLogicalDate, durationMonths, payday, paydayRule } = params;
+  if (durationMonths < 1) {
+    throw new Error(`durationMonths must be at least 1: ${durationMonths}`);
+  }
+
+  const targetMonthReference = addMonths(anchorLogicalDate, durationMonths);
+  return calculatePaydayInMonth({
+    referenceDate: targetMonthReference,
+    payday,
+    paydayRule,
+    monthOffset: 0,
+  });
 }
 
 /**

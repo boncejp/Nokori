@@ -6,7 +6,9 @@ export type SurplusMode = (typeof SURPLUS_MODE_VALUES)[number];
 
 export type OnboardingProfileInput = {
   readonly target_amount: number;
-  readonly target_date: string;
+  readonly target_years: number;
+  readonly target_months: number;
+  readonly target_duration_months: number;
   readonly current_total_savings: number;
   readonly monthly_income: number;
   readonly payday: number;
@@ -37,7 +39,8 @@ function parseNumberField(
     return { success: false, errorMessage: `${label}を入力してください。` };
   }
 
-  const parsedValue = Number(rawValue);
+  const normalizedValue = rawValue.replace(/,/g, "");
+  const parsedValue = Number(normalizedValue);
   if (!Number.isFinite(parsedValue)) {
     return { success: false, errorMessage: `${label}は数値で入力してください。` };
   }
@@ -46,24 +49,6 @@ function parseNumberField(
   }
 
   return { success: true, data: Math.floor(parsedValue) };
-}
-
-function parseTargetDate(rawValue: unknown): ValidationResult<string> {
-  if (typeof rawValue !== "string" || rawValue.length === 0) {
-    return { success: false, errorMessage: "達成期限を入力してください。" };
-  }
-
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(rawValue)) {
-    return { success: false, errorMessage: "達成期限の形式が不正です。" };
-  }
-
-  const parsedDate = new Date(rawValue);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return { success: false, errorMessage: "達成期限が不正です。" };
-  }
-
-  return { success: true, data: rawValue };
 }
 
 function parsePaydayRule(rawValue: unknown): ValidationResult<PaydayRule> {
@@ -96,8 +81,22 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
   const targetAmountResult = parseNumberField(rawPayload, "target_amount", "目標金額");
   if (!targetAmountResult.success) return targetAmountResult;
 
-  const targetDateResult = parseTargetDate(rawPayload.target_date);
-  if (!targetDateResult.success) return targetDateResult;
+  const targetYearsResult = parseNumberField(rawPayload, "target_years", "達成期限（年）");
+  if (!targetYearsResult.success) return targetYearsResult;
+  if (targetYearsResult.data < 0 || targetYearsResult.data > 20) {
+    return { success: false, errorMessage: "達成期限（年）は0〜20で選択してください。" };
+  }
+
+  const targetMonthsResult = parseNumberField(rawPayload, "target_months", "達成期限（月）");
+  if (!targetMonthsResult.success) return targetMonthsResult;
+  if (targetMonthsResult.data < 0 || targetMonthsResult.data > 11) {
+    return { success: false, errorMessage: "達成期限（月）は0〜11で選択してください。" };
+  }
+
+  const targetDurationMonths = targetYearsResult.data * 12 + targetMonthsResult.data;
+  if (targetDurationMonths < 1) {
+    return { success: false, errorMessage: "達成期限は1か月以上になるように選択してください。" };
+  }
 
   const currentSavingsResult = parseNumberField(
     rawPayload,
@@ -144,7 +143,9 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
     success: true,
     data: {
       target_amount: targetAmountResult.data,
-      target_date: targetDateResult.data,
+      target_years: targetYearsResult.data,
+      target_months: targetMonthsResult.data,
+      target_duration_months: targetDurationMonths,
       current_total_savings: currentSavingsResult.data,
       monthly_income: monthlyIncomeResult.data,
       payday: paydayResult.data,

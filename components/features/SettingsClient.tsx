@@ -8,7 +8,9 @@ import { PAYDAY_RULE_VALUES, SURPLUS_MODE_VALUES } from "@/lib/logic/onboarding-
 
 type SettingsFormValues = {
   target_amount: string;
-  target_date: string;
+  target_years: string;
+  target_months: string;
+  target_date_display: string;
   current_total_savings: string;
   monthly_income: string;
   payday: string;
@@ -128,12 +130,15 @@ export function SettingsClient({ initialValues }: SettingsClientProps) {
             value={formValues.target_amount}
             onChange={handleChangeValue}
           />
-          <DateField
-            label="目標日"
-            name="target_date"
-            value={formValues.target_date}
+          <DurationField
+            label="達成期限"
+            yearsName="target_years"
+            yearsValue={formValues.target_years}
+            monthsName="target_months"
+            monthsValue={formValues.target_months}
             onChange={handleChangeValue}
           />
+          <ReadOnlyField label="目標日（自動算出）" value={formValues.target_date_display} />
           <NumberField
             label="現在の貯金総額"
             name="current_total_savings"
@@ -244,17 +249,58 @@ function NumberField({ label, name, value, onChange, min = 0, max }: FieldProps 
   );
 }
 
-function DateField({ label, name, value, onChange }: FieldProps) {
+function ReadOnlyField({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span>{label}</span>
       <input
-        type="date"
-        required
+        type="text"
+        readOnly
         value={value}
-        onChange={(event) => onChange(name, event.target.value)}
         className="rounded-md border border-zinc-300 px-3 py-2"
       />
+    </label>
+  );
+}
+
+function DurationField(props: {
+  readonly label: string;
+  readonly yearsName: keyof SettingsFormValues;
+  readonly yearsValue: string;
+  readonly monthsName: keyof SettingsFormValues;
+  readonly monthsValue: string;
+  readonly onChange: (name: keyof SettingsFormValues, value: string) => void;
+}) {
+  const { label, yearsName, yearsValue, monthsName, monthsValue, onChange } = props;
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      <span>{label}</span>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          required
+          value={yearsValue}
+          onChange={(event) => onChange(yearsName, event.target.value)}
+          className="rounded-md border border-zinc-300 px-3 py-2"
+        >
+          {Array.from({ length: 21 }, (_, year) => (
+            <option key={year} value={String(year)}>
+              {year}年
+            </option>
+          ))}
+        </select>
+        <select
+          required
+          value={monthsValue}
+          onChange={(event) => onChange(monthsName, event.target.value)}
+          className="rounded-md border border-zinc-300 px-3 py-2"
+        >
+          {Array.from({ length: 12 }, (_, month) => (
+            <option key={month} value={String(month)}>
+              {month}か月
+            </option>
+          ))}
+        </select>
+      </div>
     </label>
   );
 }

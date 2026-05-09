@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 import type { UtilityType } from "@/lib/logic/budget-logic";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 
+import { PaydaySalaryModal } from "./PaydaySalaryModal";
+
 type DashboardClientProps = {
+  readonly salaryPrompt: {
+    readonly cycleStartLogicalDate: string;
+    readonly currentMonthlyIncome: number;
+  } | null;
   readonly initialState: {
     readonly logicalToday: string;
     readonly remainingCycleBudget: number;
@@ -20,9 +26,9 @@ type DashboardClientProps = {
 type TransactionKind = "NORMAL" | "SPECIAL" | "UTILITY";
 
 const TRANSACTION_KIND_OPTIONS: readonly { readonly value: TransactionKind; readonly label: string }[] = [
-  { value: "NORMAL", label: "NORMAL" },
-  { value: "SPECIAL", label: "SPECIAL" },
-  { value: "UTILITY", label: "UTILITY" },
+  { value: "NORMAL", label: "普通支出" },
+  { value: "SPECIAL", label: "特別支出" },
+  { value: "UTILITY", label: "光熱費" },
 ];
 
 const UTILITY_TYPE_OPTIONS: readonly { readonly value: UtilityType; readonly label: string }[] = [
@@ -30,6 +36,17 @@ const UTILITY_TYPE_OPTIONS: readonly { readonly value: UtilityType; readonly lab
   { value: "GAS", label: "ガス" },
   { value: "WATER", label: "水道" },
 ];
+
+function formatTransactionHeading(transaction: DashboardTransaction): string {
+  if (transaction.type === "SPECIAL") {
+    return "特別支出";
+  }
+  if (transaction.utility_type !== null) {
+    const label = UTILITY_TYPE_OPTIONS.find((o) => o.value === transaction.utility_type)?.label ?? "";
+    return `光熱費（${label}）`;
+  }
+  return "普通支出";
+}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("ja-JP", {
@@ -39,7 +56,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function DashboardClient({ initialState }: DashboardClientProps) {
+export function DashboardClient({ salaryPrompt, initialState }: DashboardClientProps) {
   const hydrate = useDashboardStore((state) => state.hydrate);
   const submitTransaction = useDashboardStore((state) => state.submitTransaction);
   const remainingToday = useDashboardStore((state) => state.remainingToday);
@@ -91,10 +108,11 @@ export function DashboardClient({ initialState }: DashboardClientProps) {
 
   return (
     <section
-      className={`space-y-6 rounded-xl border p-6 ${
+      className={`relative space-y-6 rounded-xl border p-6 ${
         isOverBudget ? "border-red-300 bg-red-50 text-red-950" : "border-zinc-200 bg-white"
       }`}
     >
+      {salaryPrompt !== null ? <PaydaySalaryModal salaryPrompt={salaryPrompt} /> : null}
       <div className="space-y-2">
         <p className="text-sm text-zinc-500">今日の残り予算</p>
         <p className="text-4xl font-bold tracking-tight">{formatCurrency(remainingToday)}</p>
@@ -137,6 +155,7 @@ export function DashboardClient({ initialState }: DashboardClientProps) {
               value={kindInput}
               onChange={(event) => setKindInput(parseKind(event.target.value))}
               className="rounded-md border border-zinc-300 px-3 py-2"
+              title="支出のカテゴリ（予算・貯金への効き方が異なります）"
             >
               {TRANSACTION_KIND_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -173,6 +192,23 @@ export function DashboardClient({ initialState }: DashboardClientProps) {
             />
           </label>
         </div>
+        <details className="rounded-md border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm text-zinc-700">
+          <summary className="cursor-pointer select-none font-medium text-zinc-800">支出の種別が予算に与える影響</summary>
+          <ul className="mt-2 list-inside list-disc space-y-1.5 text-zinc-600">
+            <li>
+              <strong className="font-medium text-zinc-800">普通支出</strong>
+              ：当日の可処分予算と翌日以降の日次予算から差し引かれます。
+            </li>
+            <li>
+              <strong className="font-medium text-zinc-800">特別支出</strong>
+              ：貯金総額から直接差し引かれ、当日の日次予算には影響しません（貯金ノルマは再計算されます）。
+            </li>
+            <li>
+              <strong className="font-medium text-zinc-800">光熱費</strong>
+              ：各項目の概算との差額が当月の残り予算に加減されます（実額が概算より安いと予算が増え、高いと減ります）。
+            </li>
+          </ul>
+        </details>
         {formErrorMessage.length > 0 ? <p className="text-sm text-red-700">{formErrorMessage}</p> : null}
         {submitErrorMessage.length > 0 ? <p className="text-sm text-red-700">{submitErrorMessage}</p> : null}
         <button
@@ -197,10 +233,7 @@ export function DashboardClient({ initialState }: DashboardClientProps) {
                 className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2"
               >
                 <div>
-                  <p className="font-medium">
-                    {transaction.type}
-                    {transaction.utility_type !== null ? ` (${transaction.utility_type})` : ""}
-                  </p>
+                  <p className="font-medium">{formatTransactionHeading(transaction)}</p>
                   {transaction.memo ? <p className="text-zinc-500">{transaction.memo}</p> : null}
                 </div>
                 <p className={transaction.isOptimistic ? "text-zinc-500" : "text-zinc-800"}>

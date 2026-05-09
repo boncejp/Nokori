@@ -10,7 +10,8 @@ import {
 
 type OnboardingFormValues = {
   target_amount: string;
-  target_date: string;
+  target_years: string;
+  target_months: string;
   current_total_savings: string;
   monthly_income: string;
   payday: string;
@@ -23,9 +24,20 @@ type OnboardingFormValues = {
   initial_budget: string;
 };
 
+const MONEY_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
+  "target_amount",
+  "current_total_savings",
+  "monthly_income",
+  "fixed_costs",
+  "estimated_electricity",
+  "estimated_gas",
+  "estimated_water",
+  "initial_budget",
+];
+
 const STEP_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
   "target_amount",
-  "target_date",
+  "target_years",
   "current_total_savings",
   "monthly_income",
   "payday",
@@ -40,7 +52,8 @@ const STEP_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
 
 const INITIAL_FORM_VALUES: OnboardingFormValues = {
   target_amount: "",
-  target_date: "",
+  target_years: "0",
+  target_months: "1",
   current_total_savings: "",
   monthly_income: "",
   payday: "",
@@ -66,7 +79,8 @@ export function OnboardingStepForm() {
   const currentStepLabel = useMemo(() => {
     const labels: Record<keyof OnboardingFormValues, string> = {
       target_amount: "最終目標金額",
-      target_date: "達成期限",
+      target_years: "達成期限",
+      target_months: "達成期限（月）",
       current_total_savings: "現在の貯金総額",
       monthly_income: "月収（手取り概算）",
       payday: "給料日",
@@ -82,10 +96,38 @@ export function OnboardingStepForm() {
   }, [currentFieldName]);
 
   const handleChangeValue = (fieldName: keyof OnboardingFormValues, value: string) => {
+    if (isMoneyFieldName(fieldName)) {
+      const numericOnlyValue = toNumericOnly(value);
+      setFormValues((previousValues) => ({ ...previousValues, [fieldName]: numericOnlyValue }));
+      return;
+    }
+
+    if (fieldName === "payday") {
+      const numericOnlyValue = toNumericOnly(value);
+      setFormValues((previousValues) => ({ ...previousValues, [fieldName]: numericOnlyValue }));
+      return;
+    }
+
     setFormValues((previousValues) => ({ ...previousValues, [fieldName]: value }));
   };
 
   const handleGoNext = () => {
+    if (currentFieldName === "target_years") {
+      const targetYears = Number(formValues.target_years);
+      const targetMonths = Number(formValues.target_months);
+      if (targetYears === 0 && targetMonths === 0) {
+        setErrorMessage("達成期限は1か月以上になるように選択してください。");
+        return;
+      }
+    }
+    if (currentFieldName === "payday") {
+      const payday = Number(formValues.payday);
+      if (payday < 1 || payday > 31) {
+        setErrorMessage("給料日は1〜31の範囲で入力してください。");
+        return;
+      }
+    }
+
     const currentValue = formValues[currentFieldName];
     if (typeof currentValue !== "string" || currentValue.length === 0) {
       setErrorMessage(`${currentStepLabel}を入力してください。`);
@@ -100,8 +142,16 @@ export function OnboardingStepForm() {
     setCurrentStepIndex((previousIndex) => Math.max(previousIndex - 1, 0));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSave = async () => {
+    if (!isLastStep) {
+      return;
+    }
+    const lastFieldValue = formValues.initial_budget;
+    if (lastFieldValue.length === 0) {
+      setErrorMessage("初回開始予算を入力してください。");
+      return;
+    }
+
     setErrorMessage("");
     setIsSubmitting(true);
 
@@ -131,7 +181,7 @@ export function OnboardingStepForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-xl space-y-6 rounded-lg border p-6">
+    <form onSubmit={(event) => event.preventDefault()} className="w-full max-w-xl space-y-6 rounded-lg border p-6">
       <p className="text-sm text-zinc-500">
         Step {currentStepIndex + 1} / {STEP_FIELD_NAMES.length}
       </p>
@@ -139,6 +189,11 @@ export function OnboardingStepForm() {
         <label htmlFor={currentFieldName} className="text-base font-medium">
           {currentStepLabel}
         </label>
+        {currentFieldName === "target_years" ? (
+          <p className="text-sm text-zinc-500">
+            ユーザーが選択した期間後の給料日が目標日になります。
+          </p>
+        ) : null}
         {renderCurrentField({
           currentFieldName,
           formValues,
@@ -159,7 +214,8 @@ export function OnboardingStepForm() {
         </button>
         {isLastStep ? (
           <button
-            type="submit"
+            type="button"
+            onClick={handleSave}
             disabled={isSubmitting}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
           >
@@ -188,15 +244,53 @@ function renderCurrentField(params: {
   const { currentFieldName, formValues, onChange } = params;
   const value = formValues[currentFieldName];
 
-  if (currentFieldName === "target_date") {
+  const helperTextByField: Partial<Record<keyof OnboardingFormValues, string>> = {
+    target_amount: "例: 1,000,000（円）",
+    monthly_income: "例: 260,000（円）",
+    payday: "毎月の給料日を1〜31で入力してください（例: 25）。",
+    fixed_costs: "毎月必ず固定でかかり、金額の変動しない支出の合計額を入力してください。",
+    initial_budget: "次の給料日までに使うことができる金額の合計を入力してください。",
+  };
+  const helperText = helperTextByField[currentFieldName];
+
+  if (currentFieldName === "target_years") {
     return (
-      <input
-        id={currentFieldName}
-        type="date"
-        value={value}
-        onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2"
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label htmlFor="target_years" className="text-sm text-zinc-600">
+            年
+          </label>
+          <select
+            id="target_years"
+            value={formValues.target_years}
+            onChange={(event) => onChange("target_years", event.target.value)}
+            className="w-full rounded-md border border-zinc-300 px-3 py-2"
+          >
+            {Array.from({ length: 21 }, (_, year) => (
+              <option key={year} value={String(year)}>
+                {year}年
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="target_months" className="text-sm text-zinc-600">
+            月
+          </label>
+          <select
+            id="target_months"
+            value={formValues.target_months}
+            onChange={(event) => onChange("target_months", event.target.value)}
+            className="w-full rounded-md border border-zinc-300 px-3 py-2"
+          >
+            {Array.from({ length: 12 }, (_, month) => (
+              <option key={month} value={String(month)}>
+                {month}か月
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     );
   }
 
@@ -230,16 +324,22 @@ function renderCurrentField(params: {
   }
 
   const isPaydayField = currentFieldName === "payday";
+  const inputValue = isMoneyFieldName(currentFieldName) ? formatNumberWithCommas(value) : value;
   return (
-    <input
-      id={currentFieldName}
-      type="number"
-      min={isPaydayField ? 1 : 0}
-      max={isPaydayField ? 31 : undefined}
-      value={value}
-      onChange={(event) => onChange(currentFieldName, event.target.value)}
-      className="w-full rounded-md border border-zinc-300 px-3 py-2"
-    />
+    <div className="space-y-2">
+      <input
+        id={currentFieldName}
+        type={isPaydayField ? "number" : "text"}
+        inputMode="numeric"
+        min={isPaydayField ? 1 : undefined}
+        max={isPaydayField ? 31 : undefined}
+        placeholder={isMoneyFieldName(currentFieldName) ? "例: 1,000,000" : undefined}
+        value={inputValue}
+        onChange={(event) => onChange(currentFieldName, event.target.value)}
+        className="w-full rounded-md border border-zinc-300 px-3 py-2"
+      />
+      {helperText ? <p className="text-sm text-zinc-500">{helperText}</p> : null}
+    </div>
   );
 }
 
@@ -256,4 +356,20 @@ function getErrorMessageFromResponseBody(body: unknown): string | null {
     return null;
   }
   return errorMessage;
+}
+
+function toNumericOnly(value: string): string {
+  return value.replace(/[^\d]/g, "");
+}
+
+function formatNumberWithCommas(value: string): string {
+  if (value.length === 0) {
+    return "";
+  }
+  const normalizedValue = String(Number(value));
+  return normalizedValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function isMoneyFieldName(fieldName: keyof OnboardingFormValues): boolean {
+  return MONEY_FIELD_NAMES.includes(fieldName);
 }

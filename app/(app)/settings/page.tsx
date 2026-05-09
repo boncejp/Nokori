@@ -20,13 +20,17 @@ export default async function SettingsPage() {
   }
 
   const profile = profileResult.data;
+  const targetYears = Math.floor(profile.target_duration_months / 12);
+  const targetMonths = profile.target_duration_months % 12;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <SettingsClient
         initialValues={{
           target_amount: String(profile.target_amount),
-          target_date: profile.target_date,
+          target_years: String(targetYears),
+          target_months: String(targetMonths),
+          target_date_display: profile.target_date,
           current_total_savings: String(profile.current_total_savings),
           monthly_income: String(profile.monthly_income),
           payday: String(profile.payday),

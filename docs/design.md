@@ -29,7 +29,9 @@
 |---|---|---|
 | `id` | uuid (PK) | `auth.users.id` と一致 |
 | `target_amount` | int | 最終目標貯金額 |
-| `target_date` | date | 達成目標日 |
+| `target_date` | date | 達成目標日（期間指定と給料日設定からサーバーで自動算出） |
+| `target_duration_months` | int | 達成期限の期間（月）。`1〜251`（0年0か月は不可） |
+| `target_anchor_logical_date` | date | 期間計算の起点となる論理日付（オンボーディング完了日） |
 | `payday` | int | 給料日（1〜31） |
 | `payday_rule` | enum ('BEFORE', 'AFTER', 'FIXED') | 土日祝の挙動 |
 | `monthly_income` | int | 月収手取り概算 |
@@ -40,6 +42,8 @@
 | `current_total_savings` | int | 現在の貯金総額 |
 | `surplus_mode` | enum ('STRICT', 'YUTORI') | 月次サイクル余剰金の処理モード |
 | `initial_budget` | int | オンボーディング時に手動入力した初回残り予算（第1サイクルのみ使用） |
+| `last_monthly_reset_logical_date` | date nullable | 直近の月次リセット実行日（冪等性用） |
+| `last_salary_cycle_logical_date` | date nullable | 手取り給料を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
 
@@ -201,6 +205,14 @@ function processMonthlyReset(
 - `profiles.payday_rule` に基づき、次回の給料日を動的に算出する。
 - 土日および `@holiday-jp/holiday_jp` で判定される日本の祝日と被った場合、BEFORE（前倒し）/ AFTER（後ろ倒し）/ FIXED（そのまま）のルールに従って補正する。
 - 給料日の数値（例：31）が当月に存在しない場合（2月等）は、当月の最終日を採用する。
+
+### 4.6 達成期限（期間）から目標日を決定
+
+- オンボーディング/設定では `年(0〜20)` と `月(0〜11)` で達成期限を入力する。
+- `0年0か月` はバリデーションエラーとし、最低 `1か月` を必須にする。
+- 目標日は `target_anchor_logical_date` から `Nか月後` の月における給料日を採用する。
+- 給料日算出には既存の `payday` / `payday_rule`（BEFORE / AFTER / FIXED）と月末補正をそのまま適用する。
+- `payday` または `payday_rule` を変更した場合、同一 `target_duration_months` を使って `target_date` を再計算して保存する（クライアント計算結果は信用しない）。
 
 ---
 

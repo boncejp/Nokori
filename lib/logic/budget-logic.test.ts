@@ -10,6 +10,7 @@ import {
   calculateNextRemainingCycleBudget,
   calculateRemainingMonthsToTarget,
   calculateNextPayday,
+  calculateTargetDateFromDuration,
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
   getLogicalDate,
@@ -173,6 +174,56 @@ describe("calculateNextPayday", () => {
       paydayRule: "FIXED",
     });
     expect(formatJstDate(result)).toBe("2026-02-28");
+  });
+});
+
+describe("calculateTargetDateFromDuration", () => {
+  it("期間1か月後の同月給料日を返す", () => {
+    const result = calculateTargetDateFromDuration({
+      anchorLogicalDate: new Date("2026-04-10T00:00:00+09:00"),
+      durationMonths: 1,
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+    expect(formatJstDate(result)).toBe("2026-05-24");
+  });
+
+  it("給料日補正ルールを適用して目標日を算出する", () => {
+    const result = calculateTargetDateFromDuration({
+      anchorLogicalDate: new Date("2026-04-10T00:00:00+09:00"),
+      durationMonths: 1,
+      payday: 3,
+      paydayRule: "AFTER",
+    });
+    expect(formatJstDate(result)).toBe("2026-05-07");
+  });
+
+  it("月末が存在しない月では月末補正を適用する", () => {
+    const result = calculateTargetDateFromDuration({
+      anchorLogicalDate: new Date("2026-01-15T00:00:00+09:00"),
+      durationMonths: 1,
+      payday: 31,
+      paydayRule: "FIXED",
+    });
+    expect(formatJstDate(result)).toBe("2026-02-28");
+  });
+
+  it("同一期間でも給料日変更時は目標日が再計算される", () => {
+    const fixed = calculateTargetDateFromDuration({
+      anchorLogicalDate: new Date("2026-04-10T00:00:00+09:00"),
+      durationMonths: 2,
+      payday: 24,
+      paydayRule: "FIXED",
+    });
+    const changedPayday = calculateTargetDateFromDuration({
+      anchorLogicalDate: new Date("2026-04-10T00:00:00+09:00"),
+      durationMonths: 2,
+      payday: 28,
+      paydayRule: "FIXED",
+    });
+
+    expect(formatJstDate(fixed)).toBe("2026-06-24");
+    expect(formatJstDate(changedPayday)).toBe("2026-06-28");
   });
 });
 

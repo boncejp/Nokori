@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { subDays } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
 
 import { DashboardClient } from "@/components/features/DashboardClient";
 import {
@@ -12,9 +11,9 @@ import {
   calculateNextRemainingCycleBudget,
   getLogicalDate,
   isWithinFirstCycle,
-  shouldExecuteMonthlyReset,
   processMonthlyReset,
-  TIMEZONE,
+  shouldExecuteMonthlyReset,
+  toJstDateString,
   type UtilityType,
 } from "@/lib/logic/budget-logic";
 import {
@@ -75,6 +74,21 @@ export default async function DashboardPage() {
     ? null
     : "当日の支出データ取得に失敗しました。表示内容が最新ではない可能性があります。";
 
+  const paydayPromptCycleWindow = calculateCycleWindow({
+    referenceDate: resolvedCycle.logicalToday,
+    payday: resolvedCycle.profile.payday,
+    paydayRule: resolvedCycle.profile.payday_rule,
+  });
+  const paydayCycleStartKey = toJstDateString(paydayPromptCycleWindow.cycleStartDate);
+  const isLogicalCycleStartPayday = resolvedCycle.logicalTodayString === paydayCycleStartKey;
+  const salaryPrompt =
+    isLogicalCycleStartPayday && resolvedCycle.profile.last_salary_cycle_logical_date !== paydayCycleStartKey
+      ? {
+          cycleStartLogicalDate: paydayCycleStartKey,
+          currentMonthlyIncome: resolvedCycle.profile.monthly_income,
+        }
+      : null;
+
   async function logoutAction() {
     "use server";
     const actionSupabase = await createSupabaseServerClient();
@@ -86,6 +100,7 @@ export default async function DashboardPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
       <DashboardClient
+        salaryPrompt={salaryPrompt}
         initialState={{
           logicalToday: resolvedCycle.logicalTodayString,
           remainingCycleBudget: resolvedCycle.remainingCycleBudget,
@@ -122,14 +137,6 @@ export default async function DashboardPage() {
       </form>
     </main>
   );
-}
-
-function toJstDateString(date: Date): string {
-  const jstDate = toZonedTime(date, TIMEZONE);
-  const year = String(jstDate.getFullYear());
-  const month = String(jstDate.getMonth() + 1).padStart(2, "0");
-  const day = String(jstDate.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 async function resolveDashboardCycle(params: {

@@ -20,12 +20,15 @@ export type Database = {
           id: string
           initial_budget: number
           last_monthly_reset_logical_date: string | null
+          last_salary_cycle_logical_date: string | null
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
           surplus_mode: Database["public"]["Enums"]["surplus_mode"]
           target_amount: number
+          target_anchor_logical_date: string
           target_date: string
+          target_duration_months: number
           updated_at: string
         }
         Insert: {
@@ -38,12 +41,15 @@ export type Database = {
           id: string
           initial_budget: number
           last_monthly_reset_logical_date?: string | null
+          last_salary_cycle_logical_date?: string | null
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
           surplus_mode: Database["public"]["Enums"]["surplus_mode"]
           target_amount: number
+          target_anchor_logical_date: string
           target_date: string
+          target_duration_months: number
           updated_at?: string
         }
         Update: {
@@ -56,12 +62,15 @@ export type Database = {
           id?: string
           initial_budget?: number
           last_monthly_reset_logical_date?: string | null
+          last_salary_cycle_logical_date?: string | null
           monthly_income?: number
           payday?: number
           payday_rule?: Database["public"]["Enums"]["payday_rule"]
           surplus_mode?: Database["public"]["Enums"]["surplus_mode"]
           target_amount?: number
+          target_anchor_logical_date?: string
           target_date?: string
+          target_duration_months?: number
           updated_at?: string
         }
         Relationships: []

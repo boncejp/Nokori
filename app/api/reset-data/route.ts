@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
   }
 
-  const deleteTransactionsResult = await deleteAllOwnTransactions(supabase);
+  const deleteTransactionsResult = await deleteAllOwnTransactions(supabase, user.id);
   if (!deleteTransactionsResult.success) {
     return NextResponse.json(
       { errorMessage: "取引データの削除に失敗しました。時間をおいて再試行してください。" },

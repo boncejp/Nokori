@@ -135,7 +135,7 @@ export async function insertOwnSpecialTransactionAndDecrementSavings(
 
   const { data, error } = await supabase.rpc("create_special_transaction_and_decrement_savings", {
     p_amount: input.amount,
-    p_memo: input.memo,
+    p_memo: input.memo ?? "",
     p_logical_date: logicalDateString,
   });
 
@@ -166,8 +166,9 @@ export async function deleteOwnTransactionById(
 
 export async function deleteAllOwnTransactions(
   supabase: SupabaseClient<Database>,
+  userId: string,
 ): Promise<Result<number>> {
-  const { data, error } = await supabase.from("transactions").delete().select("id");
+  const { data, error } = await supabase.from("transactions").delete().eq("user_id", userId).select("id");
 
   if (error) {
     return { success: false, error: new Error(error.message) };
