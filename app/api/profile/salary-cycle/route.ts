@@ -6,6 +6,7 @@ import {
   calculateMonthlySavingsQuota,
   getLogicalDate,
   isWithinFirstCycle,
+  parseJstDateKeyToDate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
 import { fetchProfileByUserId, updateOwnProfileByUserId } from "@/lib/supabase/profiles";
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
   const deltaBase = newBase - oldBase;
 
   const firstCycle = isWithinFirstCycle({
-    onboardingCompletedAt: new Date(profile.created_at),
+    anchorLogicalDate: parseJstDateKeyToDate(profile.target_anchor_logical_date),
     referenceDate: logicalNow,
     payday: profile.payday,
     paydayRule: profile.payday_rule,

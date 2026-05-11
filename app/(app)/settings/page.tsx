@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { SettingsClient } from "@/components/features/SettingsClient";
+import {
+  calculateMonthlySavingsQuota,
+  getLogicalDate,
+  isWithinFirstCycle,
+  parseJstDateKeyToDate,
+} from "@/lib/logic/budget-logic";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -23,6 +29,23 @@ export default async function SettingsPage() {
   const targetYears = Math.floor(profile.target_duration_months / 12);
   const targetMonths = profile.target_duration_months % 12;
 
+  const logicalNow = getLogicalDate(new Date());
+  const anchorLogicalDate = parseJstDateKeyToDate(profile.target_anchor_logical_date);
+  const isFirstCycle = isWithinFirstCycle({
+    anchorLogicalDate,
+    referenceDate: logicalNow,
+    payday: profile.payday,
+    paydayRule: profile.payday_rule,
+  });
+  const monthlySavingsQuota = !isFirstCycle
+    ? calculateMonthlySavingsQuota({
+        targetAmount: profile.target_amount,
+        currentTotalSavings: profile.current_total_savings,
+        targetDate: new Date(`${profile.target_date}T00:00:00+09:00`),
+        referenceDate: logicalNow,
+      })
+    : null;
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <SettingsClient
@@ -31,7 +54,7 @@ export default async function SettingsPage() {
           target_years: String(targetYears),
           target_months: String(targetMonths),
           target_date_display: profile.target_date,
-          current_total_savings: String(profile.current_total_savings),
+          current_total_savings_display: String(profile.current_total_savings),
           monthly_income: String(profile.monthly_income),
           payday: String(profile.payday),
           payday_rule: profile.payday_rule,
@@ -42,6 +65,8 @@ export default async function SettingsPage() {
           surplus_mode: profile.surplus_mode,
           initial_budget: String(profile.initial_budget),
         }}
+        monthlySavingsQuota={monthlySavingsQuota}
+        showMonthlySavingsQuota={!isFirstCycle}
       />
     </main>
   );

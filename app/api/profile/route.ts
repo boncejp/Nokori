@@ -3,13 +3,15 @@ import { NextResponse } from "next/server";
 import {
   calculateTargetDateFromDuration,
   getLogicalDate,
+  isFirstCycleInitialBudgetExceedingTotalAssets,
   isWithinFirstCycle,
+  parseJstDateKeyToDate,
+  resolveCurrentTotalSavingsForProfileSettingsUpdate,
   resolveInitialBudgetForSettingsUpdate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
-import { validateOnboardingPayload } from "@/lib/logic/onboarding-validation";
-import { fetchProfileByUserId } from "@/lib/supabase/profiles";
-import { upsertOwnProfile } from "@/lib/supabase/profiles";
+import { validateProfileSettingsPayload } from "@/lib/logic/onboarding-validation";
+import { fetchProfileByUserId, upsertOwnProfile } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function PATCH(request: Request) {
@@ -26,11 +28,6 @@ export async function PATCH(request: Request) {
   }
 
   const rawBody: unknown = await request.json();
-  const validationResult = validateOnboardingPayload(rawBody);
-  if (!validationResult.success) {
-    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
-  }
-
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
     return NextResponse.json(
@@ -38,33 +35,60 @@ export async function PATCH(request: Request) {
       { status: 400 },
     );
   }
-  const anchorLogicalDateKey =
-    profileResult.data.target_anchor_logical_date ??
-    toJstDateString(getLogicalDate(new Date(profileResult.data.created_at)));
-  const anchorLogicalDate = new Date(`${anchorLogicalDateKey}T00:00:00+09:00`);
+
+  const anchorLogicalDateKey = profileResult.data.target_anchor_logical_date;
+  const anchorLogicalDate = parseJstDateKeyToDate(anchorLogicalDateKey);
   const logicalNow = getLogicalDate(new Date());
+  const validationResult = validateProfileSettingsPayload(rawBody);
+  if (!validationResult.success) {
+    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
+  }
+
+  const firstCycleWithSubmittedPayday = isWithinFirstCycle({
+    anchorLogicalDate,
+    referenceDate: logicalNow,
+    payday: validationResult.data.payday,
+    paydayRule: validationResult.data.payday_rule,
+  });
+  if (
+    isFirstCycleInitialBudgetExceedingTotalAssets({
+      isWithinFirstCycle: firstCycleWithSubmittedPayday,
+      submittedInitialBudget: validationResult.data.initial_budget,
+      initialTotalAssets: profileResult.data.initial_total_assets,
+    })
+  ) {
+    return NextResponse.json(
+      {
+        errorMessage:
+          "次の給料日まで使う予算は、オンボーディング時点の現在の全財産以下にしてください。全財産より大きい金額は登録できません。",
+      },
+      { status: 400 },
+    );
+  }
+
   const recalculatedTargetDate = calculateTargetDateFromDuration({
     anchorLogicalDate,
     durationMonths: validationResult.data.target_duration_months,
     payday: validationResult.data.payday,
     paydayRule: validationResult.data.payday_rule,
   });
-  const firstCycle = isWithinFirstCycle({
-    onboardingCompletedAt: new Date(profileResult.data.created_at),
-    referenceDate: logicalNow,
-    payday: validationResult.data.payday,
-    paydayRule: validationResult.data.payday_rule,
-  });
   const resolvedInitialBudget = resolveInitialBudgetForSettingsUpdate({
-    isWithinFirstCycle: firstCycle,
+    isWithinFirstCycle: firstCycleWithSubmittedPayday,
     existingInitialBudget: profileResult.data.initial_budget,
     submittedInitialBudget: validationResult.data.initial_budget,
+  });
+
+  const resolvedCurrentTotalSavings = resolveCurrentTotalSavingsForProfileSettingsUpdate({
+    isWithinFirstCycle: firstCycleWithSubmittedPayday,
+    initialTotalAssets: profileResult.data.initial_total_assets,
+    existingInitialBudget: profileResult.data.initial_budget,
+    submittedInitialBudget: validationResult.data.initial_budget,
+    existingCurrentTotalSavings: profileResult.data.current_total_savings,
   });
 
   const profileColumns = {
     target_amount: validationResult.data.target_amount,
     target_duration_months: validationResult.data.target_duration_months,
-    current_total_savings: validationResult.data.current_total_savings,
     monthly_income: validationResult.data.monthly_income,
     payday: validationResult.data.payday,
     payday_rule: validationResult.data.payday_rule,
@@ -74,6 +98,8 @@ export async function PATCH(request: Request) {
     estimated_water: validationResult.data.estimated_water,
     surplus_mode: validationResult.data.surplus_mode,
     initial_budget: resolvedInitialBudget,
+    current_total_savings: resolvedCurrentTotalSavings,
+    initial_total_assets: profileResult.data.initial_total_assets,
   };
 
   const updateResult = await upsertOwnProfile(supabase, {

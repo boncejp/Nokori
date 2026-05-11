@@ -45,10 +45,15 @@ export async function POST(request: Request) {
   const logicalTodayKey = toJstDateString(logicalNow);
   const targetDateKey = toJstDateString(targetDate);
   const lastSalaryCycleLogicalDate = logicalTodayKey === cycleStartKey ? cycleStartKey : null;
+  const initialTotalAssets = validationResult.data.initial_total_assets;
+  const initialBudget = validationResult.data.initial_budget;
+  const currentTotalSavingsFromOnboarding = initialTotalAssets - initialBudget;
+
   const profileColumns = {
     target_amount: validationResult.data.target_amount,
     target_duration_months: validationResult.data.target_duration_months,
-    current_total_savings: validationResult.data.current_total_savings,
+    initial_total_assets: initialTotalAssets,
+    current_total_savings: currentTotalSavingsFromOnboarding,
     monthly_income: validationResult.data.monthly_income,
     payday: validationResult.data.payday,
     payday_rule: validationResult.data.payday_rule,
@@ -57,7 +62,7 @@ export async function POST(request: Request) {
     estimated_gas: validationResult.data.estimated_gas,
     estimated_water: validationResult.data.estimated_water,
     surplus_mode: validationResult.data.surplus_mode,
-    initial_budget: validationResult.data.initial_budget,
+    initial_budget: initialBudget,
   };
 
   const upsertResult = await upsertOwnProfile(supabase, {

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { toZonedTime } from "date-fns-tz";
 
 import { HistoryClient } from "@/components/features/HistoryClient";
-import { calculateDaysUntilNextPayday, calculateNextPayday, getLogicalDate } from "@/lib/logic/budget-logic";
+import { calculateDaysUntilNextPayday } from "@/lib/logic/budget-logic";
+import { resolveDashboardCycle } from "@/lib/supabase/dashboard-cycle-resolve";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { listTransactionsByLogicalDate, listTransactionsByLogicalMonth } from "@/lib/supabase/transactions";
@@ -21,23 +21,24 @@ export default async function HistoryPage() {
   if (!profileResult.success) {
     redirect("/onboarding");
   }
-  const profile = profileResult.data;
 
-  const logicalToday = getLogicalDate(new Date());
-  const logicalTodayString = toJstDateString(logicalToday);
-  const nextPayday = calculateNextPayday({
-    fromDate: logicalToday,
-    payday: profile.payday,
-    paydayRule: profile.payday_rule,
+  const resolvedCycle = await resolveDashboardCycle({
+    supabase,
+    userId: user.id,
+    profile: profileResult.data,
   });
+  const profile = resolvedCycle.profile;
+  const logicalToday = resolvedCycle.logicalToday;
+  const logicalTodayString = resolvedCycle.logicalTodayString;
+
   const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
     fromDate: logicalToday,
-    nextPayday,
+    nextPayday: resolvedCycle.nextPayday,
     includeToday: true,
   });
   const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
     fromDate: logicalToday,
-    nextPayday,
+    nextPayday: resolvedCycle.nextPayday,
     includeToday: false,
   });
 
@@ -55,7 +56,8 @@ export default async function HistoryPage() {
       <HistoryClient
         dashboardHydration={{
           logicalToday: logicalTodayString,
-          remainingCycleBudget: profile.initial_budget,
+          isFirstCycle: resolvedCycle.isFirstCycle,
+          remainingCycleBudget: resolvedCycle.remainingCycleBudget,
           daysUntilNextPaydayIncludingToday,
           daysUntilNextPaydayExcludingToday,
           utilityEstimates: {
@@ -73,12 +75,4 @@ export default async function HistoryPage() {
       />
     </main>
   );
-}
-
-function toJstDateString(date: Date): string {
-  const jstDate = toZonedTime(date, "Asia/Tokyo");
-  const year = String(jstDate.getFullYear());
-  const month = String(jstDate.getMonth() + 1).padStart(2, "0");
-  const day = String(jstDate.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }

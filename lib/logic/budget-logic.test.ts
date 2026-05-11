@@ -14,10 +14,15 @@ import {
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
   getLogicalDate,
+  isFirstCycleInitialBudgetExceedingTotalAssets,
   isWithinFirstCycle,
+  parseJstDateKeyToDate,
+  processFirstCycleClose,
   processMonthlyReset,
+  resolveCurrentTotalSavingsForProfileSettingsUpdate,
   resolveInitialBudgetForSettingsUpdate,
   shouldExecuteMonthlyReset,
+  sumPlainNormalExpenseAmounts,
 } from "./budget-logic";
 
 function formatJstDate(date: Date): string {
@@ -40,6 +45,13 @@ describe("getLogicalDate", () => {
   it("JST 03:00:00 のとき当日を返す", () => {
     const now = new Date("2026-04-28T18:00:00Z");
     expect(formatJstDate(getLogicalDate(now))).toBe("2026-04-29");
+  });
+});
+
+describe("parseJstDateKeyToDate", () => {
+  it("YYYY-MM-DD を JST 日付の開始として解釈する", () => {
+    const d = parseJstDateKeyToDate("2026-05-11");
+    expect(formatJstDate(d)).toBe("2026-05-11");
   });
 });
 
@@ -94,6 +106,34 @@ describe("daily budget calculations", () => {
       daysUntilNextPaydayExcludingToday: 0,
     });
     expect(result).toBe(5_000);
+  });
+});
+
+describe("通常サイクルの日次予算と光熱費差額", () => {
+  it("今日の残りは当日予算から普通支出のみを差し引く（光熱費差額は混ぜない）", () => {
+    const dToday = calculateDailyBudgetToday({
+      remainingCycleBudget: 50_000,
+      daysUntilNextPaydayIncludingToday: 10,
+    });
+    expect(dToday).toBe(5_000);
+    const remainingToday = calculateRemainingToday({
+      dailyBudgetToday: dToday,
+      todaySpent: 1_000,
+    });
+    expect(remainingToday).toBe(4_000);
+  });
+
+  it("光熱費差額は翌日以降の日次予算の分子へ反映する", () => {
+    const merged = applyUtilityDeltaToRemainingBudget({
+      remainingBudget: 50_000,
+      utilityDelta: -2_000,
+    });
+    const dFuture = calculateDailyBudgetFuture({
+      remainingCycleBudget: merged,
+      todaySpent: 1_000,
+      daysUntilNextPaydayExcludingToday: 9,
+    });
+    expect(dFuture).toBeCloseTo((48_000 - 1_000) / 9, 5);
   });
 });
 
@@ -252,6 +292,41 @@ describe("processMonthlyReset", () => {
   });
 });
 
+describe("processFirstCycleClose", () => {
+  it("初回差額を貯金総額に加算し、次サイクル予算は基準予算にする（超過例）", () => {
+    const result = processFirstCycleClose({
+      currentTotalSavings: 90_000,
+      initialBudget: 50_000,
+      sumPlainNormalSpentInFirstCycle: 60_000,
+      baseCycleBudget: 88_000,
+    });
+    expect(result.nextTotalSavings).toBe(80_000);
+    expect(result.nextInitialBudget).toBe(88_000);
+  });
+
+  it("初回差額が正のときは貯金総額が増える（余剰例）", () => {
+    const result = processFirstCycleClose({
+      currentTotalSavings: 90_000,
+      initialBudget: 50_000,
+      sumPlainNormalSpentInFirstCycle: 40_000,
+      baseCycleBudget: 88_000,
+    });
+    expect(result.nextTotalSavings).toBe(100_000);
+    expect(result.nextInitialBudget).toBe(88_000);
+  });
+});
+
+describe("sumPlainNormalExpenseAmounts", () => {
+  it("普通支出（光熱費なし）のみ合算する", () => {
+    const total = sumPlainNormalExpenseAmounts([
+      { type: "NORMAL", utility_type: null, amount: 3_000 },
+      { type: "NORMAL", utility_type: "ELECTRICITY", amount: 5_000 },
+      { type: "SPECIAL", utility_type: null, amount: 20_000 },
+    ]);
+    expect(total).toBe(3_000);
+  });
+});
+
 describe("monthly savings quota", () => {
   it("残り月数で月次ノルマを再計算する", () => {
     const remainingMonths = calculateRemainingMonthsToTarget({
@@ -282,7 +357,7 @@ describe("monthly savings quota", () => {
 });
 
 describe("next remaining cycle budget", () => {
-  it("初回サイクルはinitial_budgetをそのまま使う", () => {
+  it("初回サイクルは initial_budget から前日までの普通支出（光熱費以外）を差し引く", () => {
     const result = calculateNextRemainingCycleBudget({
       isFirstCycle: true,
       initialBudget: 120_000,
@@ -290,7 +365,7 @@ describe("next remaining cycle budget", () => {
       confirmedNormalSpentBeforeToday: 12_000,
     });
 
-    expect(result).toBe(120_000);
+    expect(result).toBe(108_000);
   });
 
   it("2回目以降は設計4.2の式で算出する", () => {
@@ -360,9 +435,11 @@ describe("calculateCycleWindow", () => {
 });
 
 describe("isWithinFirstCycle", () => {
+  const anchorApril10 = parseJstDateKeyToDate("2026-04-10");
+
   it("初回当日は初回サイクル内として判定される", () => {
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      anchorLogicalDate: anchorApril10,
       referenceDate: new Date("2026-04-10T15:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -373,7 +450,7 @@ describe("isWithinFirstCycle", () => {
 
   it("初回中日も初回サイクル内として判定される", () => {
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      anchorLogicalDate: anchorApril10,
       referenceDate: new Date("2026-04-15T09:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -384,7 +461,7 @@ describe("isWithinFirstCycle", () => {
 
   it("初回最終日(最初の給料日前日)は初回サイクル内として判定される", () => {
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      anchorLogicalDate: anchorApril10,
       referenceDate: new Date("2026-04-23T09:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -395,7 +472,7 @@ describe("isWithinFirstCycle", () => {
 
   it("2回目初日(最初の給料日)は初回サイクル外として判定される", () => {
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-10T10:00:00+09:00"),
+      anchorLogicalDate: anchorApril10,
       referenceDate: new Date("2026-04-24T09:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -404,9 +481,10 @@ describe("isWithinFirstCycle", () => {
     expect(result).toBe(false);
   });
 
-  it("27:00ルールでオンボーディング日を論理日付として扱う", () => {
+  it("アンカーが27:00前日付と一致する場合も初回サイクル内として判定される", () => {
+    const anchorApril9 = parseJstDateKeyToDate("2026-04-09");
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-10T02:00:00+09:00"),
+      anchorLogicalDate: anchorApril9,
       referenceDate: new Date("2026-04-09T12:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -416,8 +494,9 @@ describe("isWithinFirstCycle", () => {
   });
 
   it("オンボーディング論理日が給料日当日でも初回サイクルは空にならない", () => {
+    const anchorApril24 = parseJstDateKeyToDate("2026-04-24");
     const duringFirstCycle = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-24T12:00:00+09:00"),
+      anchorLogicalDate: anchorApril24,
       referenceDate: new Date("2026-05-10T09:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -427,8 +506,9 @@ describe("isWithinFirstCycle", () => {
   });
 
   it("オンボーディング論理日が給料日当日の場合は次回給料日当日にfalseになる", () => {
+    const anchorApril24 = parseJstDateKeyToDate("2026-04-24");
     const result = isWithinFirstCycle({
-      onboardingCompletedAt: new Date("2026-04-24T12:00:00+09:00"),
+      anchorLogicalDate: anchorApril24,
       referenceDate: new Date("2026-05-24T09:00:00+09:00"),
       payday: 24,
       paydayRule: "FIXED",
@@ -509,5 +589,87 @@ describe("resolveInitialBudgetForSettingsUpdate", () => {
     });
 
     expect(result).toBe(65_000);
+  });
+});
+
+describe("resolveCurrentTotalSavingsForProfileSettingsUpdate", () => {
+  it("初回サイクル中に次の給料日まで使う予算を変えたとき、内訳式が成り立っていれば貯金を再計算する", () => {
+    const result = resolveCurrentTotalSavingsForProfileSettingsUpdate({
+      isWithinFirstCycle: true,
+      initialTotalAssets: 140_000,
+      existingInitialBudget: 50_000,
+      submittedInitialBudget: 60_000,
+      existingCurrentTotalSavings: 90_000,
+    });
+
+    expect(result).toBe(80_000);
+  });
+
+  it("初回サイクル中で予算を変えていないときは既存の貯金総額を維持する", () => {
+    const result = resolveCurrentTotalSavingsForProfileSettingsUpdate({
+      isWithinFirstCycle: true,
+      initialTotalAssets: 140_000,
+      existingInitialBudget: 50_000,
+      submittedInitialBudget: 50_000,
+      existingCurrentTotalSavings: 90_000,
+    });
+
+    expect(result).toBe(90_000);
+  });
+
+  it("通常サイクル中は既存の貯金総額を維持する", () => {
+    const result = resolveCurrentTotalSavingsForProfileSettingsUpdate({
+      isWithinFirstCycle: false,
+      initialTotalAssets: 140_000,
+      existingInitialBudget: 50_000,
+      submittedInitialBudget: 60_000,
+      existingCurrentTotalSavings: 90_000,
+    });
+
+    expect(result).toBe(90_000);
+  });
+
+  it("初回サイクル中でも貯金が内訳式とずれていれば予算変更で巻き戻さない", () => {
+    const result = resolveCurrentTotalSavingsForProfileSettingsUpdate({
+      isWithinFirstCycle: true,
+      initialTotalAssets: 140_000,
+      existingInitialBudget: 50_000,
+      submittedInitialBudget: 60_000,
+      existingCurrentTotalSavings: 85_000,
+    });
+
+    expect(result).toBe(85_000);
+  });
+});
+
+describe("isFirstCycleInitialBudgetExceedingTotalAssets", () => {
+  it("初回サイクル中かつ次の給料日まで使う予算が全財産を超えるとき true", () => {
+    expect(
+      isFirstCycleInitialBudgetExceedingTotalAssets({
+        isWithinFirstCycle: true,
+        submittedInitialBudget: 150_000,
+        initialTotalAssets: 140_000,
+      }),
+    ).toBe(true);
+  });
+
+  it("初回サイクル中でも予算が全財産以下なら false", () => {
+    expect(
+      isFirstCycleInitialBudgetExceedingTotalAssets({
+        isWithinFirstCycle: true,
+        submittedInitialBudget: 140_000,
+        initialTotalAssets: 140_000,
+      }),
+    ).toBe(false);
+  });
+
+  it("通常サイクル中は予算が全財産を超えても false（このガードは初回専用）", () => {
+    expect(
+      isFirstCycleInitialBudgetExceedingTotalAssets({
+        isWithinFirstCycle: false,
+        submittedInitialBudget: 200_000,
+        initialTotalAssets: 140_000,
+      }),
+    ).toBe(false);
   });
 });

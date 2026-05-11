@@ -9,6 +9,7 @@ import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashb
 type HistoryClientProps = {
   readonly dashboardHydration: {
     readonly logicalToday: string;
+    readonly isFirstCycle: boolean;
     readonly remainingCycleBudget: number;
     readonly daysUntilNextPaydayIncludingToday: number;
     readonly daysUntilNextPaydayExcludingToday: number;
@@ -36,10 +37,19 @@ function formatCreatedAt(value: string): string {
 }
 
 function formatKindLabel(transaction: DashboardTransaction): string {
-  if (transaction.utility_type !== null) {
-    return `UTILITY (${transaction.utility_type})`;
+  if (transaction.type === "SPECIAL") {
+    return "特別支出";
   }
-  return transaction.type;
+  if (transaction.utility_type !== null) {
+    let utilityLabel = "水道";
+    if (transaction.utility_type === "ELECTRICITY") {
+      utilityLabel = "電気";
+    } else if (transaction.utility_type === "GAS") {
+      utilityLabel = "ガス";
+    }
+    return `光熱費（${utilityLabel}）`;
+  }
+  return "普通支出";
 }
 
 export function HistoryClient({

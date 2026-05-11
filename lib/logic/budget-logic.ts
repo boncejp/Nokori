@@ -32,6 +32,11 @@ export function toJstDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/** profiles の論理日キー（YYYY-MM-DD）を、その日の JST 開始の瞬間として解釈する Date を返す。 */
+export function parseJstDateKeyToDate(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00+09:00`);
+}
+
 function createJstDate(year: number, monthIndex: number, dayOfMonth: number): Date {
   const month = String(monthIndex + 1).padStart(2, "0");
   const day = String(dayOfMonth).padStart(2, "0");
@@ -328,6 +333,54 @@ export function resolveInitialBudgetForSettingsUpdate(params: {
 }
 
 /**
+ * 設定 PATCH 時に保存すべき current_total_savings（現在の貯金総額）を決定する。
+ * 初回サイクル中に「次の給料日まで使う予算」だけを変えたとき、かつ
+ * 保存前の貯金がオンボーディング時点の内訳式と一致しているときに限り、
+ * 全財産を維持したまま貯金側を `initial_total_assets - 新予算` に合わせる。
+ */
+export function resolveCurrentTotalSavingsForProfileSettingsUpdate(params: {
+  readonly isWithinFirstCycle: boolean;
+  readonly initialTotalAssets: number;
+  readonly existingInitialBudget: number;
+  readonly submittedInitialBudget: number;
+  readonly existingCurrentTotalSavings: number;
+}): number {
+  const {
+    isWithinFirstCycle,
+    initialTotalAssets,
+    existingInitialBudget,
+    submittedInitialBudget,
+    existingCurrentTotalSavings,
+  } = params;
+
+  if (!isWithinFirstCycle) {
+    return existingCurrentTotalSavings;
+  }
+
+  if (submittedInitialBudget === existingInitialBudget) {
+    return existingCurrentTotalSavings;
+  }
+
+  const impliedSavingsFromExistingBudget = initialTotalAssets - existingInitialBudget;
+  if (existingCurrentTotalSavings !== impliedSavingsFromExistingBudget) {
+    return existingCurrentTotalSavings;
+  }
+
+  return initialTotalAssets - submittedInitialBudget;
+}
+
+/** 初回サイクル中に「次の給料日まで使う予算」が全財産を超えないか（API 400 用）。 */
+export function isFirstCycleInitialBudgetExceedingTotalAssets(params: {
+  readonly isWithinFirstCycle: boolean;
+  readonly submittedInitialBudget: number;
+  readonly initialTotalAssets: number;
+}): boolean {
+  return (
+    params.isWithinFirstCycle && params.submittedInitialBudget > params.initialTotalAssets
+  );
+}
+
+/**
  * 次サイクルのremainingCycleBudgetを算出する。
  */
 export function calculateNextRemainingCycleBudget(params: {
@@ -338,9 +391,47 @@ export function calculateNextRemainingCycleBudget(params: {
 }): number {
   const { isFirstCycle, initialBudget, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
   if (isFirstCycle) {
-    return initialBudget;
+    return initialBudget - confirmedNormalSpentBeforeToday;
   }
   return baseCycleBudget - confirmedNormalSpentBeforeToday;
+}
+
+/**
+ * 初回サイクル締め（次の給料日リセット）: STRICT / YUTORI を適用せず、初回差額のみ貯金総額へ反映する。
+ */
+export function processFirstCycleClose(params: {
+  readonly currentTotalSavings: number;
+  readonly initialBudget: number;
+  readonly sumPlainNormalSpentInFirstCycle: number;
+  readonly baseCycleBudget: number;
+}): {
+  readonly nextTotalSavings: number;
+  readonly nextInitialBudget: number;
+} {
+  const firstCycleDelta = params.initialBudget - params.sumPlainNormalSpentInFirstCycle;
+  return {
+    nextTotalSavings: params.currentTotalSavings + firstCycleDelta,
+    nextInitialBudget: params.baseCycleBudget,
+  };
+}
+
+type PlainNormalExpenseRow = {
+  readonly type: "NORMAL" | "SPECIAL";
+  readonly utility_type: UtilityType | null;
+  readonly amount: number;
+};
+
+/** 初回サイクル締め・初回残予算などで用いる「普通支出」（type=NORMAL かつ光熱費なし）の合計。 */
+export function sumPlainNormalExpenseAmounts(transactions: readonly PlainNormalExpenseRow[]): number {
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.type !== "NORMAL") {
+      return sum;
+    }
+    if (transaction.utility_type !== null) {
+      return sum;
+    }
+    return sum + transaction.amount;
+  }, 0);
 }
 
 /**
@@ -436,25 +527,24 @@ export function calculateTargetDateFromDuration(params: {
 
 /**
  * 初回サイクル中かどうかを判定する。
- * 初回サイクル = オンボーディング完了日(論理日付) から最初の給料日前日まで。
+ * 初回サイクル = target_anchor_logical_date（論理日）から最初の給料日前日まで。
  */
 export function isWithinFirstCycle(params: {
-  readonly onboardingCompletedAt: Date;
+  readonly anchorLogicalDate: Date;
   readonly referenceDate: Date;
   readonly payday: number;
   readonly paydayRule: PaydayRule;
 }): boolean {
-  const { onboardingCompletedAt, referenceDate, payday, paydayRule } = params;
-  const onboardingLogicalDate = getLogicalDate(onboardingCompletedAt);
+  const { anchorLogicalDate, referenceDate, payday, paydayRule } = params;
+  const anchorString = toJstDateString(anchorLogicalDate);
   const firstCandidatePayday = calculateNextPayday({
-    fromDate: onboardingLogicalDate,
+    fromDate: anchorLogicalDate,
     payday,
     paydayRule,
   });
-  const onboardingLogicalDateString = toJstDateString(onboardingLogicalDate);
   const firstCandidatePaydayString = toJstDateString(firstCandidatePayday);
   const firstPaydayAfterOnboarding =
-    onboardingLogicalDateString === firstCandidatePaydayString
+    anchorString === firstCandidatePaydayString
       ? calculateNextPayday({
           fromDate: addDays(firstCandidatePayday, 1),
           payday,
@@ -465,10 +555,7 @@ export function isWithinFirstCycle(params: {
   const referenceDateString = toJstDateString(referenceDate);
   const firstCycleEndDateString = toJstDateString(firstCycleEndDate);
 
-  return (
-    referenceDateString >= onboardingLogicalDateString &&
-    referenceDateString <= firstCycleEndDateString
-  );
+  return referenceDateString >= anchorString && referenceDateString <= firstCycleEndDateString;
 }
 
 /**

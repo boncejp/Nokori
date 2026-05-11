@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { validateOnboardingPayload } from "./onboarding-validation";
+import { validateOnboardingPayload, validateProfileSettingsPayload } from "./onboarding-validation";
 
 const VALID_PAYLOAD = {
   target_amount: "1000000",
   target_years: "1",
   target_months: "0",
-  current_total_savings: "100000",
+  initial_total_assets: "200000",
   monthly_income: "300000",
   payday: "24",
   payday_rule: "FIXED",
@@ -23,7 +23,7 @@ describe("validateOnboardingPayload", () => {
     const result = validateOnboardingPayload({
       ...VALID_PAYLOAD,
       target_amount: "1,000,000",
-      current_total_savings: "100,000",
+      initial_total_assets: "200,000",
       monthly_income: "300,000",
       fixed_costs: "80,000",
       estimated_electricity: "10,000",
@@ -38,6 +38,7 @@ describe("validateOnboardingPayload", () => {
     }
     expect(result.data.target_amount).toBe(1_000_000);
     expect(result.data.initial_budget).toBe(120_000);
+    expect(result.data.initial_total_assets).toBe(200_000);
   });
 
   it("0年0か月をバリデーションエラーにする", () => {
@@ -68,5 +69,44 @@ describe("validateOnboardingPayload", () => {
     expect(result.data.target_duration_months).toBe(27);
     expect(result.data.target_years).toBe(2);
     expect(result.data.target_months).toBe(3);
+  });
+
+  it("次の給料日まで使う予算が現在の全財産を超えるとエラーにする", () => {
+    const result = validateOnboardingPayload({
+      ...VALID_PAYLOAD,
+      initial_total_assets: "50000",
+      initial_budget: "80000",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("expected validation error");
+    }
+    expect(result.errorMessage).toContain("全財産以下");
+  });
+});
+
+describe("validateProfileSettingsPayload", () => {
+  it("オンボーディングと同形式のフィールドを検証する", () => {
+    const result = validateProfileSettingsPayload({
+      target_amount: "900000",
+      target_years: "1",
+      target_months: "0",
+      monthly_income: "280000",
+      payday: "25",
+      payday_rule: "FIXED",
+      fixed_costs: "70000",
+      estimated_electricity: "8000",
+      estimated_gas: "5000",
+      estimated_water: "3000",
+      surplus_mode: "YUTORI",
+      initial_budget: "100000",
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error("expected validation success");
+    }
+    expect(result.data.initial_budget).toBe(100_000);
   });
 });

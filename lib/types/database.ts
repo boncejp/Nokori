@@ -19,6 +19,7 @@ export type Database = {
           fixed_costs: number
           id: string
           initial_budget: number
+          initial_total_assets: number
           last_monthly_reset_logical_date: string | null
           last_salary_cycle_logical_date: string | null
           monthly_income: number
@@ -40,6 +41,7 @@ export type Database = {
           fixed_costs: number
           id: string
           initial_budget: number
+          initial_total_assets: number
           last_monthly_reset_logical_date?: string | null
           last_salary_cycle_logical_date?: string | null
           monthly_income: number
@@ -61,6 +63,7 @@ export type Database = {
           fixed_costs?: number
           id?: string
           initial_budget?: number
+          initial_total_assets?: number
           last_monthly_reset_logical_date?: string | null
           last_salary_cycle_logical_date?: string | null
           monthly_income?: number

@@ -41,6 +41,7 @@ type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
 type DashboardHydration = {
   readonly logicalToday: string;
+  readonly isFirstCycle: boolean;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
   readonly daysUntilNextPaydayExcludingToday: number;
@@ -60,6 +61,7 @@ type DashboardComputedMetrics = {
 
 type DashboardStoreState = {
   readonly logicalToday: string;
+  readonly isFirstCycle: boolean;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
   readonly daysUntilNextPaydayExcludingToday: number;
@@ -97,6 +99,7 @@ function calculateComputedMetrics(params: {
   readonly daysUntilNextPaydayExcludingToday: number;
   readonly utilityEstimates: UtilityEstimateMap;
   readonly transactions: readonly DashboardTransaction[];
+  readonly isFirstCycle: boolean;
 }): DashboardComputedMetrics {
   const {
     remainingCycleBudget,
@@ -104,6 +107,7 @@ function calculateComputedMetrics(params: {
     daysUntilNextPaydayExcludingToday,
     utilityEstimates,
     transactions,
+    isFirstCycle,
   } = params;
 
   const todaySpentTotal = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
@@ -129,12 +133,14 @@ function calculateComputedMetrics(params: {
     dailyBudgetToday,
     todaySpent: todayNormalSpent,
   });
-  const remainingBudgetWithUtilityDelta = applyUtilityDeltaToRemainingBudget({
-    remainingBudget: remainingCycleBudget,
-    utilityDelta: utilityDeltaTotal,
-  });
+  const remainingBudgetForFuture = isFirstCycle
+    ? remainingCycleBudget
+    : applyUtilityDeltaToRemainingBudget({
+        remainingBudget: remainingCycleBudget,
+        utilityDelta: utilityDeltaTotal,
+      });
   const futureDailyBudget = calculateDailyBudgetFuture({
-    remainingCycleBudget: remainingBudgetWithUtilityDelta,
+    remainingCycleBudget: remainingBudgetForFuture,
     todaySpent: todayNormalSpent,
     daysUntilNextPaydayExcludingToday,
   });
@@ -249,6 +255,7 @@ function resolveLogicalTodayDate(logicalToday: string): Date {
 
 export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
   logicalToday: "",
+  isFirstCycle: false,
   remainingCycleBudget: 0,
   daysUntilNextPaydayIncludingToday: 1,
   daysUntilNextPaydayExcludingToday: 0,
@@ -268,6 +275,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
     set({
       remainingCycleBudget: payload.remainingCycleBudget,
       logicalToday: payload.logicalToday,
+      isFirstCycle: payload.isFirstCycle,
       daysUntilNextPaydayIncludingToday: payload.daysUntilNextPaydayIncludingToday,
       daysUntilNextPaydayExcludingToday: payload.daysUntilNextPaydayExcludingToday,
       utilityEstimates: payload.utilityEstimates,
@@ -300,6 +308,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       daysUntilNextPaydayExcludingToday,
       utilityEstimates: payload.utilityEstimates,
       transactions: previousState.transactions,
+      isFirstCycle: previousState.isFirstCycle,
     });
 
     set({
@@ -320,6 +329,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       daysUntilNextPaydayExcludingToday: previousState.daysUntilNextPaydayExcludingToday,
       utilityEstimates: previousState.utilityEstimates,
       transactions: nextTransactions,
+      isFirstCycle: previousState.isFirstCycle,
     });
 
     set({
@@ -370,6 +380,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
         daysUntilNextPaydayExcludingToday: previousState.daysUntilNextPaydayExcludingToday,
         utilityEstimates: previousState.utilityEstimates,
         transactions: committedTransactions,
+        isFirstCycle: previousState.isFirstCycle,
       });
 
       set({
@@ -399,6 +410,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       daysUntilNextPaydayExcludingToday: previousState.daysUntilNextPaydayExcludingToday,
       utilityEstimates: previousState.utilityEstimates,
       transactions: nextTransactions,
+      isFirstCycle: previousState.isFirstCycle,
     });
 
     set({

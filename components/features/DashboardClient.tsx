@@ -14,6 +14,7 @@ type DashboardClientProps = {
   } | null;
   readonly initialState: {
     readonly logicalToday: string;
+    readonly isFirstCycle: boolean;
     readonly remainingCycleBudget: number;
     readonly daysUntilNextPaydayIncludingToday: number;
     readonly daysUntilNextPaydayExcludingToday: number;
@@ -67,6 +68,7 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
   const isSubmitting = useDashboardStore((state) => state.isSubmitting);
   const submitErrorMessage = useDashboardStore((state) => state.submitErrorMessage);
   const transactions = useDashboardStore((state) => state.transactions);
+  const isFirstCycle = useDashboardStore((state) => state.isFirstCycle);
 
   const [amountInput, setAmountInput] = useState("");
   const [memoInput, setMemoInput] = useState("");
@@ -91,8 +93,8 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
     const result = await submitTransaction({
       amount: Math.floor(parsedAmount),
       memo: memoInput.trim().length > 0 ? memoInput.trim() : null,
-      kind: kindInput,
-      utilityType: kindInput === "UTILITY" ? utilityTypeInput : null,
+      kind: isFirstCycle ? "NORMAL" : kindInput,
+      utilityType: isFirstCycle ? null : kindInput === "UTILITY" ? utilityTypeInput : null,
     });
 
     if (!result.success) {
@@ -122,10 +124,23 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <MetricCard label="当日予算（D_today）" value={formatCurrency(dailyBudgetToday)} />
-        <MetricCard label="翌日以降予測（D_future）" value={formatCurrency(futureDailyBudget)} />
+        <MetricCard label="当日の目安予算" value={formatCurrency(dailyBudgetToday)} />
+        <MetricCard label="翌日以降の目安（1日あたり）" value={formatCurrency(futureDailyBudget)} />
         <MetricCard label="今日の支出合計" value={formatCurrency(todaySpentTotal)} />
       </div>
+
+      {isFirstCycle ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <p className="font-medium text-sky-950">初回サイクルについて</p>
+          <ul className="mt-2 list-inside list-disc space-y-1.5 text-sky-900">
+            <li>初回サイクルでは、次の給料日まで使う予算だけを「普通支出」として管理します。</li>
+            <li>光熱費と特別支出の詳細管理は、次の給料日以降の通常サイクルから利用できます。</li>
+            <li>
+              通常サイクルでは、光熱費は概算との差額を残り予算へ反映し、特別支出は貯金総額から直接差し引いて月次貯金ノルマを再計算します。
+            </li>
+          </ul>
+        </div>
+      ) : null}
 
       {initialState.initialTransactionsErrorMessage ? (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -151,18 +166,27 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span>種別</span>
-            <select
-              value={kindInput}
-              onChange={(event) => setKindInput(parseKind(event.target.value))}
-              className="rounded-md border border-zinc-300 px-3 py-2"
-              title="支出のカテゴリ（予算・貯金への効き方が異なります）"
-            >
-              {TRANSACTION_KIND_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            {isFirstCycle ? (
+              <input
+                type="text"
+                readOnly
+                value="普通支出"
+                className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-700"
+              />
+            ) : (
+              <select
+                value={kindInput}
+                onChange={(event) => setKindInput(parseKind(event.target.value))}
+                className="rounded-md border border-zinc-300 px-3 py-2"
+                title="支出のカテゴリ（予算・貯金への効き方が異なります）"
+              >
+                {TRANSACTION_KIND_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </label>
           {kindInput === "UTILITY" ? (
             <label className="flex flex-col gap-1 text-sm">
@@ -192,23 +216,25 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
             />
           </label>
         </div>
-        <details className="rounded-md border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm text-zinc-700">
-          <summary className="cursor-pointer select-none font-medium text-zinc-800">支出の種別が予算に与える影響</summary>
-          <ul className="mt-2 list-inside list-disc space-y-1.5 text-zinc-600">
-            <li>
-              <strong className="font-medium text-zinc-800">普通支出</strong>
-              ：当日の可処分予算と翌日以降の日次予算から差し引かれます。
-            </li>
-            <li>
-              <strong className="font-medium text-zinc-800">特別支出</strong>
-              ：貯金総額から直接差し引かれ、当日の日次予算には影響しません（貯金ノルマは再計算されます）。
-            </li>
-            <li>
-              <strong className="font-medium text-zinc-800">光熱費</strong>
-              ：各項目の概算との差額が当月の残り予算に加減されます（実額が概算より安いと予算が増え、高いと減ります）。
-            </li>
-          </ul>
-        </details>
+        {isFirstCycle ? null : (
+          <details className="rounded-md border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm text-zinc-700">
+            <summary className="cursor-pointer select-none font-medium text-zinc-800">支出の種別が予算に与える影響</summary>
+            <ul className="mt-2 list-inside list-disc space-y-1.5 text-zinc-600">
+              <li>
+                <strong className="font-medium text-zinc-800">普通支出</strong>
+                ：当日の可処分予算と翌日以降の日次予算から差し引かれます。
+              </li>
+              <li>
+                <strong className="font-medium text-zinc-800">特別支出</strong>
+                ：貯金総額から直接差し引かれ、当日の日次予算には影響しません（貯金ノルマは再計算されます）。
+              </li>
+              <li>
+                <strong className="font-medium text-zinc-800">光熱費</strong>
+                ：各項目の概算との差額が当月の残り予算に加減されます（実額が概算より安いと予算が増え、高いと減ります）。
+              </li>
+            </ul>
+          </details>
+        )}
         {formErrorMessage.length > 0 ? <p className="text-sm text-red-700">{formErrorMessage}</p> : null}
         {submitErrorMessage.length > 0 ? <p className="text-sm text-red-700">{submitErrorMessage}</p> : null}
         <button

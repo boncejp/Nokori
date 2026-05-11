@@ -11,7 +11,7 @@ type SettingsFormValues = {
   target_years: string;
   target_months: string;
   target_date_display: string;
-  current_total_savings: string;
+  current_total_savings_display: string;
   monthly_income: string;
   payday: string;
   payday_rule: string;
@@ -25,11 +25,17 @@ type SettingsFormValues = {
 
 type SettingsClientProps = {
   readonly initialValues: SettingsFormValues;
+  readonly monthlySavingsQuota: number | null;
+  readonly showMonthlySavingsQuota: boolean;
 };
 
 const REQUIRED_RESET_TEXT = "RESET";
 
-export function SettingsClient({ initialValues }: SettingsClientProps) {
+export function SettingsClient({
+  initialValues,
+  monthlySavingsQuota,
+  showMonthlySavingsQuota,
+}: SettingsClientProps) {
   const [formValues, setFormValues] = useState<SettingsFormValues>(initialValues);
   const [formErrorMessage, setFormErrorMessage] = useState("");
   const [formSuccessMessage, setFormSuccessMessage] = useState("");
@@ -55,7 +61,20 @@ export function SettingsClient({ initialValues }: SettingsClientProps) {
       const response = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formValues),
+        body: JSON.stringify({
+          target_amount: formValues.target_amount,
+          target_years: formValues.target_years,
+          target_months: formValues.target_months,
+          monthly_income: formValues.monthly_income,
+          payday: formValues.payday,
+          payday_rule: formValues.payday_rule,
+          fixed_costs: formValues.fixed_costs,
+          estimated_electricity: formValues.estimated_electricity,
+          estimated_gas: formValues.estimated_gas,
+          estimated_water: formValues.estimated_water,
+          surplus_mode: formValues.surplus_mode,
+          initial_budget: formValues.initial_budget,
+        }),
       });
       const body: unknown = await response.json();
       const apiErrorMessage = getErrorMessageFromResponseBody(body);
@@ -63,6 +82,14 @@ export function SettingsClient({ initialValues }: SettingsClientProps) {
       if (!response.ok || apiErrorMessage) {
         setFormErrorMessage(apiErrorMessage ?? "設定の保存に失敗しました。");
         return;
+      }
+
+      const savedSavings = readCurrentTotalSavingsFromProfilePatchBody(body);
+      if (savedSavings !== null) {
+        setFormValues((previousValues) => ({
+          ...previousValues,
+          current_total_savings_display: String(savedSavings),
+        }));
       }
 
       setFormSuccessMessage("設定を保存しました。");
@@ -139,12 +166,14 @@ export function SettingsClient({ initialValues }: SettingsClientProps) {
             onChange={handleChangeValue}
           />
           <ReadOnlyField label="目標日（自動算出）" value={formValues.target_date_display} />
-          <NumberField
-            label="現在の貯金総額"
-            name="current_total_savings"
-            value={formValues.current_total_savings}
-            onChange={handleChangeValue}
-          />
+          <ReadOnlyField label="現在の貯金総額（資産側）" value={formatNumberDisplay(formValues.current_total_savings_display)} />
+          {showMonthlySavingsQuota && monthlySavingsQuota !== null ? (
+            <ReadOnlyField
+              label="月次貯金ノルマ"
+              value={formatCurrencyYen(monthlySavingsQuota)}
+              helperText="（目標金額 − 現在の貯金総額）÷ 目標日までの残り月数。編集はできません。"
+            />
+          ) : null}
           <NumberField
             label="月収"
             name="monthly_income"
@@ -177,12 +206,12 @@ export function SettingsClient({ initialValues }: SettingsClientProps) {
             value={formValues.surplus_mode}
             options={SURPLUS_MODE_VALUES.map((value) => ({
               value,
-              label: value === "STRICT" ? "STRICT（余剰は貯金へ）" : "YUTORI（余剰は翌月へ）",
+              label: value === "STRICT" ? "厳格（余剰は貯金へ）" : "ゆとり（余剰は翌月の予算へ）",
             }))}
             onChange={handleChangeValue}
           />
           <NumberField
-            label="初回開始予算"
+            label="次の給料日まで使う予算（サイクル基準）"
             name="initial_budget"
             value={formValues.initial_budget}
             onChange={handleChangeValue}
@@ -249,7 +278,15 @@ function NumberField({ label, name, value, onChange, min = 0, max }: FieldProps 
   );
 }
 
-function ReadOnlyField({ label, value }: { readonly label: string; readonly value: string }) {
+function ReadOnlyField({
+  label,
+  value,
+  helperText,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly helperText?: string;
+}) {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span>{label}</span>
@@ -257,8 +294,9 @@ function ReadOnlyField({ label, value }: { readonly label: string; readonly valu
         type="text"
         readOnly
         value={value}
-        className="rounded-md border border-zinc-300 px-3 py-2"
+        className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-800"
       />
+      {helperText ? <p className="text-xs text-zinc-500">{helperText}</p> : null}
     </label>
   );
 }
@@ -330,6 +368,18 @@ function SelectField(
   );
 }
 
+function readCurrentTotalSavingsFromProfilePatchBody(body: unknown): number | null {
+  if (typeof body !== "object" || body === null || !("profile" in body)) {
+    return null;
+  }
+  const profile = (body as { profile: unknown }).profile;
+  if (typeof profile !== "object" || profile === null || !("current_total_savings" in profile)) {
+    return null;
+  }
+  const value = (profile as { current_total_savings: unknown }).current_total_savings;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 function getErrorMessageFromResponseBody(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
@@ -341,4 +391,20 @@ function getErrorMessageFromResponseBody(body: unknown): string | null {
     return null;
   }
   return body.errorMessage;
+}
+
+function formatNumberDisplay(raw: string): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return raw;
+  }
+  return new Intl.NumberFormat("ja-JP").format(Math.floor(n));
+}
+
+function formatCurrencyYen(value: number): string {
+  return new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+    maximumFractionDigits: 0,
+  }).format(value);
 }

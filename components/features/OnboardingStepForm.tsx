@@ -12,7 +12,7 @@ type OnboardingFormValues = {
   target_amount: string;
   target_years: string;
   target_months: string;
-  current_total_savings: string;
+  initial_total_assets: string;
   monthly_income: string;
   payday: string;
   payday_rule: string;
@@ -26,7 +26,7 @@ type OnboardingFormValues = {
 
 const MONEY_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
   "target_amount",
-  "current_total_savings",
+  "initial_total_assets",
   "monthly_income",
   "fixed_costs",
   "estimated_electricity",
@@ -38,7 +38,7 @@ const MONEY_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
 const STEP_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
   "target_amount",
   "target_years",
-  "current_total_savings",
+  "initial_total_assets",
   "monthly_income",
   "payday",
   "payday_rule",
@@ -54,7 +54,7 @@ const INITIAL_FORM_VALUES: OnboardingFormValues = {
   target_amount: "",
   target_years: "0",
   target_months: "1",
-  current_total_savings: "",
+  initial_total_assets: "",
   monthly_income: "",
   payday: "",
   payday_rule: PAYDAY_RULE_VALUES[0],
@@ -81,7 +81,7 @@ export function OnboardingStepForm() {
       target_amount: "最終目標金額",
       target_years: "達成期限",
       target_months: "達成期限（月）",
-      current_total_savings: "現在の貯金総額",
+      initial_total_assets: "現在の全財産",
       monthly_income: "月収（手取り概算）",
       payday: "給料日",
       payday_rule: "給料日の補正ルール",
@@ -90,7 +90,7 @@ export function OnboardingStepForm() {
       estimated_gas: "ガス代概算",
       estimated_water: "水道代概算",
       surplus_mode: "余剰金処理モード",
-      initial_budget: "初回開始予算",
+      initial_budget: "次の給料日まで使う予算",
     };
     return labels[currentFieldName];
   }, [currentFieldName]);
@@ -148,7 +148,7 @@ export function OnboardingStepForm() {
     }
     const lastFieldValue = formValues.initial_budget;
     if (lastFieldValue.length === 0) {
-      setErrorMessage("初回開始予算を入力してください。");
+      setErrorMessage("次の給料日まで使う予算を入力してください。");
       return;
     }
 
@@ -193,6 +193,21 @@ export function OnboardingStepForm() {
           <p className="text-sm text-zinc-500">
             ユーザーが選択した期間後の給料日が目標日になります。
           </p>
+        ) : null}
+        {currentFieldName === "initial_total_assets" ? (
+          <div className="space-y-2 text-sm text-zinc-600">
+            <p>
+              初回サイクルでは、現在の全財産から「次の給料日まで使う予算」を切り出し、生活費として管理します。残りは資産側の金額として扱います。
+            </p>
+            <p>
+              例: 全財産が 140,000円で、次の給料日までに使う予算が 50,000円の場合、90,000円が資産側として扱われます。
+            </p>
+          </div>
+        ) : null}
+        {currentFieldName === "initial_budget" ? (
+          <div className="space-y-2 text-sm text-zinc-600">
+            <p>次の給料日までに使う予定の金額です。現在の全財産を超えては入力できません。</p>
+          </div>
         ) : null}
         {renderCurrentField({
           currentFieldName,
@@ -246,10 +261,11 @@ function renderCurrentField(params: {
 
   const helperTextByField: Partial<Record<keyof OnboardingFormValues, string>> = {
     target_amount: "例: 1,000,000（円）",
+    initial_total_assets: "銀行口座・現金など、手元の全財産の合計（円）",
     monthly_income: "例: 260,000（円）",
     payday: "毎月の給料日を1〜31で入力してください（例: 25）。",
     fixed_costs: "毎月必ず固定でかかり、金額の変動しない支出の合計額を入力してください。",
-    initial_budget: "次の給料日までに使うことができる金額の合計を入力してください。",
+    initial_budget: "次の給料日までに使う予定の金額（円）",
   };
   const helperText = helperTextByField[currentFieldName];
 
@@ -317,8 +333,8 @@ function renderCurrentField(params: {
         onChange={(event) => onChange(currentFieldName, event.target.value)}
         className="w-full rounded-md border border-zinc-300 px-3 py-2"
       >
-        <option value="STRICT">STRICT（余剰は貯金へ）</option>
-        <option value="YUTORI">YUTORI（余剰は翌月へ）</option>
+        <option value="STRICT">厳格モード（余剰は貯金へ）</option>
+        <option value="YUTORI">ゆとりモード（余剰は翌月の予算へ）</option>
       </select>
     );
   }

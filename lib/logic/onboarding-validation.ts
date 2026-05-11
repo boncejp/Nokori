@@ -9,7 +9,7 @@ export type OnboardingProfileInput = {
   readonly target_years: number;
   readonly target_months: number;
   readonly target_duration_months: number;
-  readonly current_total_savings: number;
+  readonly initial_total_assets: number;
   readonly monthly_income: number;
   readonly payday: number;
   readonly payday_rule: PaydayRule;
@@ -21,6 +21,9 @@ export type OnboardingProfileInput = {
   readonly initial_budget: number;
 };
 
+/** 設定画面 PATCH 用（全財産はサーバー側の既存値を維持し、フォームからは送らない） */
+export type ProfileSettingsFormInput = Omit<OnboardingProfileInput, "initial_total_assets">;
+
 type ValidationResult<T> =
   | { success: true; data: T }
   | { success: false; errorMessage: string };
@@ -31,7 +34,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseNumberField(
   source: Record<string, unknown>,
-  fieldName: keyof OnboardingProfileInput,
+  fieldName: string,
   label: string,
 ): ValidationResult<number> {
   const rawValue = source[fieldName];
@@ -98,12 +101,8 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
     return { success: false, errorMessage: "達成期限は1か月以上になるように選択してください。" };
   }
 
-  const currentSavingsResult = parseNumberField(
-    rawPayload,
-    "current_total_savings",
-    "現在の貯金総額",
-  );
-  if (!currentSavingsResult.success) return currentSavingsResult;
+  const initialTotalAssetsResult = parseNumberField(rawPayload, "initial_total_assets", "現在の全財産");
+  if (!initialTotalAssetsResult.success) return initialTotalAssetsResult;
 
   const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収");
   if (!monthlyIncomeResult.success) return monthlyIncomeResult;
@@ -136,7 +135,103 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
   const surplusModeResult = parseSurplusMode(rawPayload.surplus_mode);
   if (!surplusModeResult.success) return surplusModeResult;
 
-  const initialBudgetResult = parseNumberField(rawPayload, "initial_budget", "初回開始予算");
+  const initialBudgetResult = parseNumberField(
+    rawPayload,
+    "initial_budget",
+    "次の給料日まで使う予算",
+  );
+  if (!initialBudgetResult.success) return initialBudgetResult;
+
+  if (initialBudgetResult.data > initialTotalAssetsResult.data) {
+    return {
+      success: false,
+      errorMessage:
+        "次の給料日まで使う予算は、現在の全財産以下で入力してください。全財産より大きい金額は登録できません。",
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      target_amount: targetAmountResult.data,
+      target_years: targetYearsResult.data,
+      target_months: targetMonthsResult.data,
+      target_duration_months: targetDurationMonths,
+      initial_total_assets: initialTotalAssetsResult.data,
+      monthly_income: monthlyIncomeResult.data,
+      payday: paydayResult.data,
+      payday_rule: paydayRuleResult.data,
+      fixed_costs: fixedCostsResult.data,
+      estimated_electricity: estimatedElectricityResult.data,
+      estimated_gas: estimatedGasResult.data,
+      estimated_water: estimatedWaterResult.data,
+      surplus_mode: surplusModeResult.data,
+      initial_budget: initialBudgetResult.data,
+    },
+  };
+}
+
+export function validateProfileSettingsPayload(rawPayload: unknown): ValidationResult<ProfileSettingsFormInput> {
+  if (!isRecord(rawPayload)) {
+    return { success: false, errorMessage: "送信データの形式が不正です。" };
+  }
+
+  const targetAmountResult = parseNumberField(rawPayload, "target_amount", "目標金額");
+  if (!targetAmountResult.success) return targetAmountResult;
+
+  const targetYearsResult = parseNumberField(rawPayload, "target_years", "達成期限（年）");
+  if (!targetYearsResult.success) return targetYearsResult;
+  if (targetYearsResult.data < 0 || targetYearsResult.data > 20) {
+    return { success: false, errorMessage: "達成期限（年）は0〜20で選択してください。" };
+  }
+
+  const targetMonthsResult = parseNumberField(rawPayload, "target_months", "達成期限（月）");
+  if (!targetMonthsResult.success) return targetMonthsResult;
+  if (targetMonthsResult.data < 0 || targetMonthsResult.data > 11) {
+    return { success: false, errorMessage: "達成期限（月）は0〜11で選択してください。" };
+  }
+
+  const targetDurationMonths = targetYearsResult.data * 12 + targetMonthsResult.data;
+  if (targetDurationMonths < 1) {
+    return { success: false, errorMessage: "達成期限は1か月以上になるように選択してください。" };
+  }
+
+  const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収");
+  if (!monthlyIncomeResult.success) return monthlyIncomeResult;
+
+  const paydayResult = parseNumberField(rawPayload, "payday", "給料日");
+  if (!paydayResult.success) return paydayResult;
+  if (paydayResult.data < 1 || paydayResult.data > 31) {
+    return { success: false, errorMessage: "給料日は1〜31の範囲で入力してください。" };
+  }
+
+  const paydayRuleResult = parsePaydayRule(rawPayload.payday_rule);
+  if (!paydayRuleResult.success) return paydayRuleResult;
+
+  const fixedCostsResult = parseNumberField(rawPayload, "fixed_costs", "固定費");
+  if (!fixedCostsResult.success) return fixedCostsResult;
+
+  const estimatedElectricityResult = parseNumberField(
+    rawPayload,
+    "estimated_electricity",
+    "電気代概算",
+  );
+  if (!estimatedElectricityResult.success) return estimatedElectricityResult;
+
+  const estimatedGasResult = parseNumberField(rawPayload, "estimated_gas", "ガス代概算");
+  if (!estimatedGasResult.success) return estimatedGasResult;
+
+  const estimatedWaterResult = parseNumberField(rawPayload, "estimated_water", "水道代概算");
+  if (!estimatedWaterResult.success) return estimatedWaterResult;
+
+  const surplusModeResult = parseSurplusMode(rawPayload.surplus_mode);
+  if (!surplusModeResult.success) return surplusModeResult;
+
+  const initialBudgetResult = parseNumberField(
+    rawPayload,
+    "initial_budget",
+    "次の給料日まで使う予算",
+  );
   if (!initialBudgetResult.success) return initialBudgetResult;
 
   return {
@@ -146,7 +241,6 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
       target_years: targetYearsResult.data,
       target_months: targetMonthsResult.data,
       target_duration_months: targetDurationMonths,
-      current_total_savings: currentSavingsResult.data,
       monthly_income: monthlyIncomeResult.data,
       payday: paydayResult.data,
       payday_rule: paydayRuleResult.data,
