@@ -2,13 +2,10 @@
 
 import { create } from "zustand";
 
+import { calculateDashboardCycleMetrics } from "@/lib/logic/dashboard-cycle-metrics";
 import {
   calculateDaysUntilNextPayday,
-  applyUtilityDeltaToRemainingBudget,
-  calculateDailyBudgetFuture,
   calculateNextPayday,
-  calculateDailyBudgetToday,
-  calculateRemainingToday,
   getLogicalDate,
   type UtilityType,
 } from "@/lib/logic/budget-logic";
@@ -101,59 +98,7 @@ function calculateComputedMetrics(params: {
   readonly transactions: readonly DashboardTransaction[];
   readonly isFirstCycle: boolean;
 }): DashboardComputedMetrics {
-  const {
-    remainingCycleBudget,
-    daysUntilNextPaydayIncludingToday,
-    daysUntilNextPaydayExcludingToday,
-    utilityEstimates,
-    transactions,
-    isFirstCycle,
-  } = params;
-
-  const todaySpentTotal = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-  const todayNormalSpent = transactions.reduce((sum, transaction) => {
-    if (transaction.type === "NORMAL" && transaction.utility_type === null) {
-      return sum + transaction.amount;
-    }
-    return sum;
-  }, 0);
-  const utilityDeltaTotal = transactions.reduce((sum, transaction) => {
-    if (transaction.utility_type === null) {
-      return sum;
-    }
-    const estimate = utilityEstimates[transaction.utility_type];
-    return sum + (estimate - transaction.amount);
-  }, 0);
-
-  const dailyBudgetToday = calculateDailyBudgetToday({
-    remainingCycleBudget,
-    daysUntilNextPaydayIncludingToday,
-  });
-  const remainingToday = calculateRemainingToday({
-    dailyBudgetToday,
-    todaySpent: todayNormalSpent,
-  });
-  const remainingBudgetForFuture = isFirstCycle
-    ? remainingCycleBudget
-    : applyUtilityDeltaToRemainingBudget({
-        remainingBudget: remainingCycleBudget,
-        utilityDelta: utilityDeltaTotal,
-      });
-  const futureDailyBudget = calculateDailyBudgetFuture({
-    remainingCycleBudget: remainingBudgetForFuture,
-    todaySpent: todayNormalSpent,
-    daysUntilNextPaydayExcludingToday,
-  });
-
-  return {
-    dailyBudgetToday,
-    remainingToday,
-    futureDailyBudget,
-    todaySpentTotal,
-    todayNormalSpent,
-    utilityDeltaTotal,
-    isOverBudget: remainingToday < 0,
-  };
+  return calculateDashboardCycleMetrics(params);
 }
 
 function createOptimisticTransaction(input: SubmitTransactionInput): DashboardTransaction {

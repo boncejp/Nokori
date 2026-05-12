@@ -2,9 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import {
+  calculateTargetDateFromDuration,
+  parseJstDateKeyToDate,
+  toJstDateString,
+} from "@/lib/logic/budget-logic";
 import { PAYDAY_RULE_VALUES, SURPLUS_MODE_VALUES } from "@/lib/logic/onboarding-validation";
+import {
+  calculateSettingsBudgetPreview,
+  type SettingsBudgetPreviewDraft,
+  type SettingsBudgetPreviewResult,
+} from "@/lib/logic/settings-preview-simulation";
+import type { SettingsPreviewSnapshot } from "@/lib/supabase/settings-preview-snapshot";
 
 type SettingsFormValues = {
   target_amount: string;
@@ -23,10 +34,18 @@ type SettingsFormValues = {
   initial_budget: string;
 };
 
+type PreviewContext = {
+  readonly anchorLogicalDateKey: string;
+  readonly logicalTodayKey: string;
+  readonly isFirstCycle: boolean;
+  readonly previewSnapshot: SettingsPreviewSnapshot | null;
+};
+
 type SettingsClientProps = {
   readonly initialValues: SettingsFormValues;
   readonly monthlySavingsQuota: number | null;
   readonly showMonthlySavingsQuota: boolean;
+  readonly previewContext: PreviewContext;
 };
 
 const REQUIRED_RESET_TEXT = "RESET";
@@ -35,6 +54,7 @@ export function SettingsClient({
   initialValues,
   monthlySavingsQuota,
   showMonthlySavingsQuota,
+  previewContext,
 }: SettingsClientProps) {
   const [formValues, setFormValues] = useState<SettingsFormValues>(initialValues);
   const [formErrorMessage, setFormErrorMessage] = useState("");
@@ -46,6 +66,59 @@ export function SettingsClient({
   const [isResetting, setIsResetting] = useState(false);
 
   const router = useRouter();
+
+  const computedTargetDateKey = useMemo(() => {
+    const years = Number(formValues.target_years);
+    const months = Number(formValues.target_months);
+    const payday = Number(formValues.payday);
+    const durationMonths = years * 12 + months;
+    const matchedRule = PAYDAY_RULE_VALUES.find((value) => value === formValues.payday_rule);
+    if (
+      !Number.isFinite(years) ||
+      !Number.isFinite(months) ||
+      !Number.isFinite(payday) ||
+      typeof matchedRule === "undefined" ||
+      durationMonths < 1 ||
+      payday < 1 ||
+      payday > 31
+    ) {
+      return null;
+    }
+    try {
+      const targetDate = calculateTargetDateFromDuration({
+        anchorLogicalDate: parseJstDateKeyToDate(previewContext.anchorLogicalDateKey),
+        durationMonths,
+        payday,
+        paydayRule: matchedRule,
+      });
+      return toJstDateString(targetDate);
+    } catch {
+      return null;
+    }
+  }, [formValues.payday, formValues.payday_rule, formValues.target_months, formValues.target_years, previewContext.anchorLogicalDateKey]);
+
+  const previewMetrics = useMemo(() => {
+    if (previewContext.previewSnapshot === null) {
+      return null;
+    }
+    const draft = parseDraftFromForm(formValues);
+    if (draft === null) {
+      return null;
+    }
+    return calculateSettingsBudgetPreview({
+      previewKind: previewContext.isFirstCycle ? "first" : "normal",
+      logicalToday: parseJstDateKeyToDate(previewContext.logicalTodayKey),
+      anchorLogicalDate: parseJstDateKeyToDate(previewContext.anchorLogicalDateKey),
+      currentTotalSavingsDb: previewContext.previewSnapshot.currentTotalSavingsDb,
+      snapshot: {
+        confirmedNormalSpentBeforeToday: previewContext.previewSnapshot.confirmedNormalSpentBeforeToday,
+        todayTransactions: previewContext.previewSnapshot.todayTransactions,
+        utilityEstimatesDb: previewContext.previewSnapshot.utilityEstimatesDb,
+      },
+      firstCycleCalendar: previewContext.previewSnapshot.firstCycleCalendar,
+      draft,
+    });
+  }, [formValues, previewContext]);
 
   const handleChangeValue = (fieldName: keyof SettingsFormValues, value: string) => {
     setFormValues((previousValues) => ({ ...previousValues, [fieldName]: value }));
@@ -137,6 +210,8 @@ export function SettingsClient({
     }
   };
 
+  const targetDateShown = computedTargetDateKey ?? formValues.target_date_display;
+
   return (
     <section className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6">
       <div className="flex items-center justify-between gap-3">
@@ -165,11 +240,11 @@ export function SettingsClient({
             monthsValue={formValues.target_months}
             onChange={handleChangeValue}
           />
-          <ReadOnlyField label="目標日（自動算出）" value={formValues.target_date_display} />
+          <ReadOnlyField label="目標日（自動算出）" value={targetDateShown} />
           <ReadOnlyField label="現在の貯金総額（資産側）" value={formatNumberDisplay(formValues.current_total_savings_display)} />
           {showMonthlySavingsQuota && monthlySavingsQuota !== null ? (
             <ReadOnlyField
-              label="月次貯金ノルマ"
+              label="月次貯金ノルマ（確定値）"
               value={formatCurrencyYen(monthlySavingsQuota)}
               helperText="（目標金額 − 現在の貯金総額）÷ 目標日までの残り月数。編集はできません。"
             />
@@ -217,6 +292,13 @@ export function SettingsClient({
             onChange={handleChangeValue}
           />
         </div>
+
+        <SettingsPreviewSection
+          isFirstCycle={previewContext.isFirstCycle}
+          previewMetrics={previewMetrics}
+          previewSnapshot={previewContext.previewSnapshot}
+        />
+
         {formErrorMessage ? <p className="text-sm text-red-700">{formErrorMessage}</p> : null}
         {formSuccessMessage ? <p className="text-sm text-emerald-700">{formSuccessMessage}</p> : null}
         <button
@@ -252,6 +334,110 @@ export function SettingsClient({
       </section>
     </section>
   );
+}
+
+function SettingsPreviewSection(props: {
+  readonly isFirstCycle: boolean;
+  readonly previewMetrics: SettingsBudgetPreviewResult | null;
+  readonly previewSnapshot: SettingsPreviewSnapshot | null;
+}) {
+  const { isFirstCycle, previewMetrics, previewSnapshot } = props;
+
+  return (
+    <section className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-4" aria-label="保存前プレビュー">
+      <h2 className="text-base font-semibold text-indigo-950">保存前プレビュー（動的シミュレーション）</h2>
+      {isFirstCycle ? (
+        <p className="mt-2 text-sm text-indigo-900">
+          <strong>初回サイクル:</strong>{" "}
+          当日・翌日以降の日次プレビューは「次の給料日まで使う予算」だけが反映されます。他の項目を変えても日次は原則変わりません。月次貯金ノルマは計算上表示しますが、初回の日次の母数には使われません。
+        </p>
+      ) : (
+        <p className="mt-2 text-sm text-indigo-900">
+          <strong>通常サイクル:</strong>{" "}
+          余剰金モードと「次の給料日まで使う予算」以外の編集項目がプレビューに反映されます（日次の母数は基準サイクル予算ベース）。貯金総額と今日までの確定支出・当日トランザクションは実データ固定です。
+        </p>
+      )}
+
+      {previewSnapshot === null ? (
+        <p className="mt-3 text-sm text-amber-900">
+          プレビュー用データを読み込めませんでした（サイクル解決または取得エラー）。設定の編集・保存は可能です。
+        </p>
+      ) : previewMetrics === null ? (
+        <p className="mt-3 text-sm text-zinc-700">入力内容を確認するとプレビューを表示します。</p>
+      ) : previewMetrics.status === "unavailable" ? (
+        <p className="mt-3 text-sm text-zinc-700">この入力ではプレビューを計算できません（—）。</p>
+      ) : (
+        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+            <dt className="text-xs font-medium text-zinc-500">当日予算（目安）</dt>
+            <dd className="text-lg font-semibold tabular-nums text-indigo-950">
+              {formatCurrencyYen(previewMetrics.dailyBudgetToday)}
+            </dd>
+          </div>
+          <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+            <dt className="text-xs font-medium text-zinc-500">翌日以降の目安</dt>
+            <dd className="text-lg font-semibold tabular-nums text-indigo-950">
+              {formatCurrencyYen(previewMetrics.futureDailyBudget)}
+            </dd>
+          </div>
+          <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+            <dt className="text-xs font-medium text-zinc-500">月次貯金ノルマ（プレビュー）</dt>
+            <dd className="text-lg font-semibold tabular-nums text-indigo-950">
+              {formatCurrencyYen(previewMetrics.monthlySavingsQuota)}
+            </dd>
+          </div>
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPreviewDraft | null {
+  const targetAmount = Number(formValues.target_amount);
+  const years = Number(formValues.target_years);
+  const months = Number(formValues.target_months);
+  const monthlyIncome = Number(formValues.monthly_income);
+  const payday = Number(formValues.payday);
+  const fixedCosts = Number(formValues.fixed_costs);
+  const estimatedElectricity = Number(formValues.estimated_electricity);
+  const estimatedGas = Number(formValues.estimated_gas);
+  const estimatedWater = Number(formValues.estimated_water);
+  const initialBudget = Number(formValues.initial_budget);
+
+  const numericFields = [
+    targetAmount,
+    years,
+    months,
+    monthlyIncome,
+    payday,
+    fixedCosts,
+    estimatedElectricity,
+    estimatedGas,
+    estimatedWater,
+    initialBudget,
+  ];
+  if (!numericFields.every((value) => Number.isFinite(value))) {
+    return null;
+  }
+
+  const durationMonths = years * 12 + months;
+  const matchedRule = PAYDAY_RULE_VALUES.find((value) => value === formValues.payday_rule);
+  if (typeof matchedRule === "undefined" || durationMonths < 1 || payday < 1 || payday > 31) {
+    return null;
+  }
+
+  return {
+    targetAmount,
+    targetDurationMonths: durationMonths,
+    monthlyIncome,
+    payday,
+    paydayRule: matchedRule,
+    fixedCosts,
+    estimatedElectricity,
+    estimatedGas,
+    estimatedWater,
+    initialBudget,
+  };
 }
 
 type FieldProps = {
@@ -368,23 +554,24 @@ function SelectField(
   );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function readCurrentTotalSavingsFromProfilePatchBody(body: unknown): number | null {
-  if (typeof body !== "object" || body === null || !("profile" in body)) {
+  if (!isRecord(body) || !("profile" in body)) {
     return null;
   }
-  const profile = (body as { profile: unknown }).profile;
-  if (typeof profile !== "object" || profile === null || !("current_total_savings" in profile)) {
+  const profileValue = body.profile;
+  if (!isRecord(profileValue) || !("current_total_savings" in profileValue)) {
     return null;
   }
-  const value = (profile as { current_total_savings: unknown }).current_total_savings;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  const savings = profileValue.current_total_savings;
+  return typeof savings === "number" && Number.isFinite(savings) ? savings : null;
 }
 
 function getErrorMessageFromResponseBody(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-  if (!("errorMessage" in body)) {
+  if (!isRecord(body) || !("errorMessage" in body)) {
     return null;
   }
   if (typeof body.errorMessage !== "string") {

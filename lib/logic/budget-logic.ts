@@ -16,7 +16,7 @@ export type PaydayRule = "BEFORE" | "AFTER" | "FIXED";
 export type SurplusMode = "STRICT" | "YUTORI";
 export type UtilityType = "ELECTRICITY" | "GAS" | "WATER";
 
-type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
+export type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
 function toJstStartOfDay(date: Date): Date {
   const jstDate = toZonedTime(date, TIMEZONE);
@@ -431,6 +431,31 @@ export function sumPlainNormalExpenseAmounts(transactions: readonly PlainNormalE
       return sum;
     }
     return sum + transaction.amount;
+  }, 0);
+}
+
+type ProfileLikeTransactionRow = {
+  readonly type: "NORMAL" | "SPECIAL";
+  readonly utility_type: UtilityType | null;
+  readonly amount: number;
+};
+
+/**
+ * 通常サイクルでサイクル開始〜前日までに確定した支出（普通支出に加え、光熱費は実額と概算の差を織り込む）。
+ */
+export function calculateConfirmedNormalSpentWithUtilityAdjustment(
+  transactions: readonly ProfileLikeTransactionRow[],
+  utilityEstimates: UtilityEstimateMap,
+): number {
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.type !== "NORMAL") {
+      return sum;
+    }
+    if (transaction.utility_type === null) {
+      return sum + transaction.amount;
+    }
+    const estimate = utilityEstimates[transaction.utility_type];
+    return sum - (estimate - transaction.amount);
   }, 0);
 }
 

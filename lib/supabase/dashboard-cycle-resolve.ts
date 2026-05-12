@@ -4,6 +4,7 @@ import { subDays } from "date-fns";
 import {
   calculateBaseCycleBudget,
   calculateCycleWindow,
+  calculateConfirmedNormalSpentWithUtilityAdjustment,
   calculateMonthlySavingsQuota,
   calculateNextRemainingCycleBudget,
   getLogicalDate,
@@ -14,14 +15,12 @@ import {
   shouldExecuteMonthlyReset,
   sumPlainNormalExpenseAmounts,
   toJstDateString,
-  type UtilityType,
 } from "@/lib/logic/budget-logic";
 import { applyMonthlyResetForLogicalDate, fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { listTransactionsByLogicalDateRange } from "@/lib/supabase/transactions";
 import type { Database, Tables } from "@/lib/types/database";
 
 type Profile = Tables<"profiles">;
-type Transaction = Tables<"transactions">;
 
 type Result<T, E = Error> =
   | { readonly success: true; readonly data: T }
@@ -54,22 +53,6 @@ const FAILURE_MESSAGE_BY_REASON: Readonly<Record<DashboardCycleResolutionFailure
   CONFIRMED_SPEND_FETCH_FAILED:
     "支出データの取得に失敗したため、最新の予算を表示できません。時間をおいて再読み込みしてください。",
 };
-
-function calculateConfirmedNormalSpent(
-  transactions: readonly Transaction[],
-  utilityEstimates: Readonly<Record<UtilityType, number>>,
-): number {
-  return transactions.reduce((sum, transaction) => {
-    if (transaction.type !== "NORMAL") {
-      return sum;
-    }
-    if (transaction.utility_type === null) {
-      return sum + transaction.amount;
-    }
-    const estimate = utilityEstimates[transaction.utility_type];
-    return sum - (estimate - transaction.amount);
-  }, 0);
-}
 
 async function calculateConfirmedNormalSpendBeforeToday(params: {
   readonly supabase: SupabaseClient<Database>;
@@ -104,7 +87,7 @@ async function calculateConfirmedNormalSpendBeforeToday(params: {
 
   return {
     success: true,
-    data: calculateConfirmedNormalSpent(transactionsResult.data, {
+    data: calculateConfirmedNormalSpentWithUtilityAdjustment(transactionsResult.data, {
       ELECTRICITY: params.profile.estimated_electricity,
       GAS: params.profile.estimated_gas,
       WATER: params.profile.estimated_water,
@@ -172,11 +155,14 @@ async function executeMonthlyReset(params: {
     nextTotalSavings = firstClose.nextTotalSavings;
     nextInitialBudget = firstClose.nextInitialBudget;
   } else {
-    const previousCycleConfirmedSpend = calculateConfirmedNormalSpent(previousCycleTransactionsResult.data, {
-      ELECTRICITY: params.profile.estimated_electricity,
-      GAS: params.profile.estimated_gas,
-      WATER: params.profile.estimated_water,
-    });
+    const previousCycleConfirmedSpend = calculateConfirmedNormalSpentWithUtilityAdjustment(
+      previousCycleTransactionsResult.data,
+      {
+        ELECTRICITY: params.profile.estimated_electricity,
+        GAS: params.profile.estimated_gas,
+        WATER: params.profile.estimated_water,
+      },
+    );
     const surplus = params.profile.initial_budget - previousCycleConfirmedSpend;
     const monthlyResetResult = processMonthlyReset({
       surplusMode: params.profile.surplus_mode,
