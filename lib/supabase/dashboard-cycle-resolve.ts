@@ -23,6 +23,10 @@ import type { Database, Tables } from "@/lib/types/database";
 type Profile = Tables<"profiles">;
 type Transaction = Tables<"transactions">;
 
+type Result<T, E = Error> =
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false; readonly error: E };
+
 export type ResolvedDashboardCycle = {
   readonly profile: Profile;
   readonly logicalToday: Date;
@@ -30,6 +34,25 @@ export type ResolvedDashboardCycle = {
   readonly nextPayday: Date;
   readonly remainingCycleBudget: number;
   readonly isFirstCycle: boolean;
+};
+
+export type DashboardCycleResolutionFailureReason =
+  | "MONTHLY_RESET_FAILED"
+  | "CONFIRMED_SPEND_FETCH_FAILED";
+
+export type DashboardCycleResolution =
+  | { readonly success: true; readonly data: ResolvedDashboardCycle }
+  | {
+      readonly success: false;
+      readonly reason: DashboardCycleResolutionFailureReason;
+      readonly errorMessage: string;
+    };
+
+const FAILURE_MESSAGE_BY_REASON: Readonly<Record<DashboardCycleResolutionFailureReason, string>> = {
+  MONTHLY_RESET_FAILED:
+    "データの更新に失敗しました。しばらく待ってから再読み込みしてください。",
+  CONFIRMED_SPEND_FETCH_FAILED:
+    "支出データの取得に失敗したため、最新の予算を表示できません。時間をおいて再読み込みしてください。",
 };
 
 function calculateConfirmedNormalSpent(
@@ -55,13 +78,13 @@ async function calculateConfirmedNormalSpendBeforeToday(params: {
   readonly cycleStartDate: Date;
   readonly isFirstCycle: boolean;
   readonly anchorLogicalDate: Date;
-}): Promise<number> {
+}): Promise<Result<number>> {
   const previousDay = subDays(params.logicalToday, 1);
   const cycleStartForRange = params.isFirstCycle ? params.anchorLogicalDate : params.cycleStartDate;
   const cycleStartString = toJstDateString(cycleStartForRange);
   const previousDayString = toJstDateString(previousDay);
   if (cycleStartString > previousDayString) {
-    return 0;
+    return { success: true, data: 0 };
   }
 
   const transactionsResult = await listTransactionsByLogicalDateRange(params.supabase, {
@@ -69,18 +92,24 @@ async function calculateConfirmedNormalSpendBeforeToday(params: {
     toLogicalDate: previousDay,
   });
   if (!transactionsResult.success) {
-    return 0;
+    return { success: false, error: transactionsResult.error };
   }
 
   if (params.isFirstCycle) {
-    return sumPlainNormalExpenseAmounts(transactionsResult.data);
+    return {
+      success: true,
+      data: sumPlainNormalExpenseAmounts(transactionsResult.data),
+    };
   }
 
-  return calculateConfirmedNormalSpent(transactionsResult.data, {
-    ELECTRICITY: params.profile.estimated_electricity,
-    GAS: params.profile.estimated_gas,
-    WATER: params.profile.estimated_water,
-  });
+  return {
+    success: true,
+    data: calculateConfirmedNormalSpent(transactionsResult.data, {
+      ELECTRICITY: params.profile.estimated_electricity,
+      GAS: params.profile.estimated_gas,
+      WATER: params.profile.estimated_water,
+    }),
+  };
 }
 
 async function executeMonthlyReset(params: {
@@ -89,7 +118,7 @@ async function executeMonthlyReset(params: {
   readonly profile: Profile;
   readonly logicalToday: Date;
   readonly logicalTodayString: string;
-}): Promise<{ success: true; data: Profile } | { success: false }> {
+}): Promise<Result<Profile>> {
   const previousCycleEndDate = subDays(params.logicalToday, 1);
   const anchorLogicalDate = parseJstDateKeyToDate(params.profile.target_anchor_logical_date);
   const closingFirstCycle = isWithinFirstCycle({
@@ -111,7 +140,7 @@ async function executeMonthlyReset(params: {
   });
 
   if (!previousCycleTransactionsResult.success) {
-    return { success: false };
+    return { success: false, error: previousCycleTransactionsResult.error };
   }
 
   const monthlySavingsQuota = calculateMonthlySavingsQuota({
@@ -167,13 +196,13 @@ async function executeMonthlyReset(params: {
   });
 
   if (!updatedProfileResult.success) {
-    return { success: false };
+    return { success: false, error: updatedProfileResult.error };
   }
 
   if (!updatedProfileResult.data.applied || updatedProfileResult.data.profile === null) {
     const latestProfileResult = await fetchProfileByUserId(params.supabase, params.userId);
     if (!latestProfileResult.success) {
-      return { success: false };
+      return { success: false, error: latestProfileResult.error };
     }
     return { success: true, data: latestProfileResult.data };
   }
@@ -181,11 +210,25 @@ async function executeMonthlyReset(params: {
   return { success: true, data: updatedProfileResult.data.profile };
 }
 
+function buildFailure(
+  reason: DashboardCycleResolutionFailureReason,
+  underlyingError: Error,
+): DashboardCycleResolution {
+  // 失敗理由はサーバーログに残し、UI には固定の日本語メッセージを返す。
+  // ユーザーに技術的な内部メッセージをそのまま見せないため。
+  console.error(`[resolveDashboardCycle] ${reason}:`, underlyingError.message);
+  return {
+    success: false,
+    reason,
+    errorMessage: FAILURE_MESSAGE_BY_REASON[reason],
+  };
+}
+
 export async function resolveDashboardCycle(params: {
   readonly supabase: SupabaseClient<Database>;
   readonly userId: string;
   readonly profile: Profile;
-}): Promise<ResolvedDashboardCycle> {
+}): Promise<DashboardCycleResolution> {
   const logicalToday = getLogicalDate(new Date());
   const logicalTodayString = toJstDateString(logicalToday);
   const cycleWindow = calculateCycleWindow({
@@ -209,9 +252,13 @@ export async function resolveDashboardCycle(params: {
       logicalToday,
       logicalTodayString,
     });
-    if (monthlyResetProfileResult.success) {
-      profile = monthlyResetProfileResult.data;
+    if (!monthlyResetProfileResult.success) {
+      // 月次リセットが必要な日にリセットを完遂できない場合、
+      // 締め前のプロフィールで「通常どおりの予算」をそのまま表示するとユーザーを誤認させるため、
+      // ここで失敗を伝播し、呼び出し元で予算 UI を出さない判断をしてもらう。
+      return buildFailure("MONTHLY_RESET_FAILED", monthlyResetProfileResult.error);
     }
+    profile = monthlyResetProfileResult.data;
   }
 
   const refreshedCycleWindow = calculateCycleWindow({
@@ -234,6 +281,12 @@ export async function resolveDashboardCycle(params: {
     isFirstCycle: isFirstCycleToday,
     anchorLogicalDate,
   });
+  if (!confirmedSpendResult.success) {
+    // 累計支出を 0 として続行すると remainingCycleBudget が過大になり、
+    // 「あといくら使えるか」を誤って大きく見せてしまう。失敗をそのまま伝播する。
+    return buildFailure("CONFIRMED_SPEND_FETCH_FAILED", confirmedSpendResult.error);
+  }
+
   const monthlySavingsQuota = calculateMonthlySavingsQuota({
     targetAmount: profile.target_amount,
     currentTotalSavings: profile.current_total_savings,
@@ -252,15 +305,18 @@ export async function resolveDashboardCycle(params: {
     isFirstCycle: isFirstCycleToday,
     initialBudget: profile.initial_budget,
     baseCycleBudget,
-    confirmedNormalSpentBeforeToday: confirmedSpendResult,
+    confirmedNormalSpentBeforeToday: confirmedSpendResult.data,
   });
 
   return {
-    profile,
-    logicalToday,
-    logicalTodayString,
-    nextPayday: refreshedCycleWindow.nextPaydayDate,
-    remainingCycleBudget,
-    isFirstCycle: isFirstCycleToday,
+    success: true,
+    data: {
+      profile,
+      logicalToday,
+      logicalTodayString,
+      nextPayday: refreshedCycleWindow.nextPaydayDate,
+      remainingCycleBudget,
+      isFirstCycle: isFirstCycleToday,
+    },
   };
 }

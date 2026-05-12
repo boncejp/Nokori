@@ -15,6 +15,13 @@ import type { Tables } from "@/lib/types/database";
 
 type Profile = Tables<"profiles">;
 
+async function logoutAction() {
+  "use server";
+  const actionSupabase = await createSupabaseServerClient();
+  await actionSupabase.auth.signOut();
+  redirect("/login");
+}
+
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -30,11 +37,21 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
-  const resolvedCycle = await resolveDashboardCycle({
+  const cycleResolution = await resolveDashboardCycle({
     supabase,
     userId: user.id,
     profile: profileResult.data,
   });
+
+  if (!cycleResolution.success) {
+    return (
+      <DashboardErrorLayout errorMessage={cycleResolution.errorMessage}>
+        <DashboardNavigationLinks />
+      </DashboardErrorLayout>
+    );
+  }
+
+  const resolvedCycle = cycleResolution.data;
   const profile: Profile = resolvedCycle.profile;
   const logicalTodayString = resolvedCycle.logicalTodayString;
   const logicalToday = resolvedCycle.logicalToday;
@@ -70,13 +87,6 @@ export default async function DashboardPage() {
         }
       : null;
 
-  async function logoutAction() {
-    "use server";
-    const actionSupabase = await createSupabaseServerClient();
-    await actionSupabase.auth.signOut();
-    redirect("/login");
-  }
-
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
@@ -97,6 +107,39 @@ export default async function DashboardPage() {
           initialTransactionsErrorMessage,
         }}
       />
+      <DashboardNavigationLinks />
+    </main>
+  );
+}
+
+type DashboardErrorLayoutProps = {
+  readonly errorMessage: string;
+  readonly children: React.ReactNode;
+};
+
+function DashboardErrorLayout({ errorMessage, children }: DashboardErrorLayoutProps) {
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <section
+        role="alert"
+        data-testid="dashboard-cycle-error"
+        className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-6 text-red-900"
+      >
+        <p className="text-base font-semibold">{errorMessage}</p>
+        <p className="text-sm text-red-800">
+          ページを再読み込みしても解消しない場合は、しばらく時間をおいてからお試しください。
+          数値の整合性を保つため、今回の予算サマリーは表示していません。
+        </p>
+      </section>
+      {children}
+    </main>
+  );
+}
+
+function DashboardNavigationLinks() {
+  return (
+    <>
       <Link
         href="/history"
         className="inline-flex w-fit rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
@@ -117,6 +160,6 @@ export default async function DashboardPage() {
           ログアウト
         </button>
       </form>
-    </main>
+    </>
   );
 }
