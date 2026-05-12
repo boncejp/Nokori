@@ -12,6 +12,7 @@ const EMPTY_SNAPSHOT = {
     GAS: 5_000,
     WATER: 5_000,
   },
+  initialBudgetDb: 100_000,
 } as const;
 
 describe("calculateSettingsBudgetPreview", () => {
@@ -39,6 +40,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 50_000,
       },
     });
@@ -63,6 +65,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 80_000,
       },
     });
@@ -103,6 +106,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 50_000,
       },
     });
@@ -127,6 +131,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 50_000,
       },
     });
@@ -143,7 +148,7 @@ describe("calculateSettingsBudgetPreview", () => {
     expect(b.previewKind).toBe("first");
   });
 
-  it("通常サイクルでは surplus_mode / initial_budget 以外の変更が日次・ノルマに反映される", () => {
+  it("通常サイクルでは収支草案の変更が日次・ノルマに反映される（草案の initial_budget は母数に使わない）", () => {
     const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
     const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
 
@@ -157,6 +162,7 @@ describe("calculateSettingsBudgetPreview", () => {
       estimatedElectricity: 10_000,
       estimatedGas: 10_000,
       estimatedWater: 10_000,
+      surplusMode: "STRICT" as const,
       initialBudget: 999_999,
     };
 
@@ -169,6 +175,7 @@ describe("calculateSettingsBudgetPreview", () => {
         confirmedNormalSpentBeforeToday: 20_000,
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
+        initialBudgetDb: 120_000,
       },
       firstCycleCalendar: null,
       draft: {
@@ -186,6 +193,7 @@ describe("calculateSettingsBudgetPreview", () => {
         confirmedNormalSpentBeforeToday: 20_000,
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
+        initialBudgetDb: 120_000,
       },
       firstCycleCalendar: null,
       draft: {
@@ -218,6 +226,7 @@ describe("calculateSettingsBudgetPreview", () => {
         confirmedNormalSpentBeforeToday: 20_000,
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
+        initialBudgetDb: 120_000,
       },
       firstCycleCalendar: null,
       draft: {
@@ -235,6 +244,63 @@ describe("calculateSettingsBudgetPreview", () => {
     expect(differentInitialBudget.previewKind).toBe("normal");
     expect(differentInitialBudget.dailyBudgetToday).toBe(looserFixed.dailyBudgetToday);
     expect(differentInitialBudget.futureDailyBudget).toBe(looserFixed.futureDailyBudget);
+  });
+
+  it("通常サイクル・YUTORI は保存済み initial_budget が基準より大きいと STRICT より日次が有利になる", () => {
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
+
+    const sharedSnapshot = {
+      confirmedNormalSpentBeforeToday: 0,
+      todayTransactions: [],
+      utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
+      initialBudgetDb: 280_000,
+    };
+
+    const draftBase = {
+      targetAmount: 2_000_000,
+      targetDurationMonths: 24,
+      monthlyIncome: 400_000,
+      payday: 25,
+      paydayRule: "FIXED" as const,
+      fixedCosts: 100_000,
+      estimatedElectricity: 10_000,
+      estimatedGas: 10_000,
+      estimatedWater: 10_000,
+      initialBudget: 50_000,
+    };
+
+    const strictPreview = calculateSettingsBudgetPreview({
+      previewKind: "normal",
+      logicalToday,
+      anchorLogicalDate,
+      currentTotalSavingsDb: 300_000,
+      snapshot: sharedSnapshot,
+      firstCycleCalendar: null,
+      draft: { ...draftBase, surplusMode: "STRICT" as const },
+    });
+
+    const yutoriPreview = calculateSettingsBudgetPreview({
+      previewKind: "normal",
+      logicalToday,
+      anchorLogicalDate,
+      currentTotalSavingsDb: 300_000,
+      snapshot: sharedSnapshot,
+      firstCycleCalendar: null,
+      draft: { ...draftBase, surplusMode: "YUTORI" as const },
+    });
+
+    expect(strictPreview.status).toBe("ok");
+    expect(yutoriPreview.status).toBe("ok");
+    if (strictPreview.status !== "ok" || yutoriPreview.status !== "ok") {
+      return;
+    }
+    if (strictPreview.previewKind !== "normal" || yutoriPreview.previewKind !== "normal") {
+      return;
+    }
+
+    expect(yutoriPreview.dailyBudgetToday).toBeGreaterThan(strictPreview.dailyBudgetToday);
+    expect(yutoriPreview.futureDailyBudget).toBeGreaterThan(strictPreview.futureDailyBudget);
   });
 
   it("初回プレビューでは calculateBaseCycleBudget と calculateMonthlySavingsQuota を呼ばない", () => {
@@ -264,6 +330,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 50_000,
       },
     });
@@ -288,6 +355,7 @@ describe("calculateSettingsBudgetPreview", () => {
         estimatedElectricity: 5_000,
         estimatedGas: 5_000,
         estimatedWater: 5_000,
+        surplusMode: "STRICT",
         initialBudget: 50_000,
       },
     });

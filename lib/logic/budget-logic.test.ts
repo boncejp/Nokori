@@ -13,6 +13,7 @@ import {
   calculateTargetDateFromDuration,
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
+  calculateYutoriCarryoverDisplay,
   getLogicalDate,
   isFirstCycleInitialBudgetExceedingTotalAssets,
   isWithinFirstCycle,
@@ -360,6 +361,7 @@ describe("next remaining cycle budget", () => {
   it("初回サイクルは initial_budget から前日までの普通支出（光熱費以外）を差し引く", () => {
     const result = calculateNextRemainingCycleBudget({
       isFirstCycle: true,
+      surplusMode: "STRICT",
       initialBudget: 120_000,
       baseCycleBudget: 95_000,
       confirmedNormalSpentBeforeToday: 12_000,
@@ -368,7 +370,7 @@ describe("next remaining cycle budget", () => {
     expect(result).toBe(108_000);
   });
 
-  it("2回目以降は設計4.2の式で算出する", () => {
+  it("2回目以降・STRICT は基準サイクル予算のみから確定支出を差し引く", () => {
     const monthlySavingsQuota = calculateMonthlySavingsQuota({
       targetAmount: 900_000,
       currentTotalSavings: 450_000,
@@ -385,6 +387,7 @@ describe("next remaining cycle budget", () => {
     });
     const result = calculateNextRemainingCycleBudget({
       isFirstCycle: false,
+      surplusMode: "STRICT",
       initialBudget: 150_000,
       baseCycleBudget,
       confirmedNormalSpentBeforeToday: 40_000,
@@ -392,6 +395,36 @@ describe("next remaining cycle budget", () => {
 
     expect(baseCycleBudget).toBeCloseTo(138_714.285, 2);
     expect(result).toBeCloseTo(98_714.285, 2);
+  });
+
+  it("2回目以降・YUTORI は initial_budget（繰り越し込み）から確定支出を差し引く", () => {
+    const monthlyReset = processMonthlyReset({
+      surplusMode: "YUTORI",
+      currentTotalSavings: 200_000,
+      baseBudget: 100_000,
+      surplus: 25_000,
+    });
+    expect(monthlyReset.nextInitialBudget).toBe(125_000);
+
+    const remaining = calculateNextRemainingCycleBudget({
+      isFirstCycle: false,
+      surplusMode: "YUTORI",
+      initialBudget: monthlyReset.nextInitialBudget,
+      baseCycleBudget: 100_000,
+      confirmedNormalSpentBeforeToday: 0,
+    });
+    expect(remaining).toBe(125_000);
+  });
+
+  it("2回目以降・STRICT では initial_budget が基準より大きくても日次の母数には使わない", () => {
+    const result = calculateNextRemainingCycleBudget({
+      isFirstCycle: false,
+      surplusMode: "STRICT",
+      initialBudget: 200_000,
+      baseCycleBudget: 100_000,
+      confirmedNormalSpentBeforeToday: 10_000,
+    });
+    expect(result).toBe(90_000);
   });
 });
 
@@ -581,14 +614,40 @@ describe("resolveInitialBudgetForSettingsUpdate", () => {
     expect(result).toBe(70_000);
   });
 
-  it("初回サイクル外では送信値を採用する", () => {
+  it("初回サイクル外では送信値に関わらず既存 initial_budget を保持する", () => {
     const result = resolveInitialBudgetForSettingsUpdate({
       isWithinFirstCycle: false,
       existingInitialBudget: 80_000,
       submittedInitialBudget: 65_000,
     });
 
-    expect(result).toBe(65_000);
+    expect(result).toBe(80_000);
+  });
+});
+
+describe("calculateYutoriCarryoverDisplay", () => {
+  it("YUTORI のみ max(0, initial − base) を返す", () => {
+    expect(
+      calculateYutoriCarryoverDisplay({
+        surplusMode: "YUTORI",
+        initialBudget: 130_000,
+        baseCycleBudget: 100_000,
+      }),
+    ).toBe(30_000);
+    expect(
+      calculateYutoriCarryoverDisplay({
+        surplusMode: "YUTORI",
+        initialBudget: 90_000,
+        baseCycleBudget: 100_000,
+      }),
+    ).toBe(0);
+    expect(
+      calculateYutoriCarryoverDisplay({
+        surplusMode: "STRICT",
+        initialBudget: 130_000,
+        baseCycleBudget: 100_000,
+      }),
+    ).toBeNull();
   });
 });
 

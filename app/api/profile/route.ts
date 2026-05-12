@@ -39,7 +39,11 @@ export async function PATCH(request: Request) {
   const anchorLogicalDateKey = profileResult.data.target_anchor_logical_date;
   const anchorLogicalDate = parseJstDateKeyToDate(anchorLogicalDateKey);
   const logicalNow = getLogicalDate(new Date());
-  const validationResult = validateProfileSettingsPayload(rawBody);
+  const validationResult = validateProfileSettingsPayload(rawBody, {
+    anchorLogicalDateKey: profileResult.data.target_anchor_logical_date,
+    logicalToday: logicalNow,
+    existingInitialBudget: profileResult.data.initial_budget,
+  });
   if (!validationResult.success) {
     return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
   }

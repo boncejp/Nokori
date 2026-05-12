@@ -42,7 +42,7 @@
 | `initial_total_assets` | int | オンボーディング時点の**現在の全財産**（要件定義書の用語に一致） |
 | `current_total_savings` | int | **貯金総額（資産側）**。**オンボーディング初回保存時のみ** `initial_total_assets - initial_budget` で初期化する（§4.8）。設定更新のたびにこの式で上書きしない |
 | `surplus_mode` | enum ('STRICT', 'YUTORI') | **通常サイクル（2回目以降）**の月次余剰金処理モード。初回サイクル締めでは使わない |
-| `initial_budget` | int | オンボーディング時に入力した**次の給料日まで使う予算**（第1サイクル専用の母数） |
+| `initial_budget` | int | **第1サイクル:** ユーザー入力の「次の給料日まで使う予算」。**通常サイクル:** 月次リセット・給料日モーダル等で更新する内部のサイクル枠（YUTORI 時は繰り越し込みの可処分を表す。設定 PATCH では上書きしない）。 |
 | `last_monthly_reset_logical_date` | date nullable | 直近の月次リセット実行日（冪等性用） |
 | `last_salary_cycle_logical_date` | date nullable | 手取り給料を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
 | `created_at` | timestamptz | |
@@ -210,9 +210,7 @@ const D_future =
   / daysUntilNextPayday({ includeToday: false });
 ```
 
-- `remainingCycleBudget`: 2回目以降は  
-  `月収 - 固定費 - 光熱費概算合計 - 月次貯金ノルマ - 前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）`  
-  など、既存の通常サイクル式に従う（**特別支出**（内部 `type = 'SPECIAL'`）の金額は含めない**。特別支出後はノルマ再計算により間接的に変化）。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
+- `remainingCycleBudget`（通常サイクル）: **STRICT** では基準サイクル予算（月収 − 固定費 − 光熱費概算 − 月次貯金ノルマ）から、前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）に加え光熱費実額との差額調整（§4.3）を織り込んだ残りを母数とする。**YUTORI** では給料日リセットで確定した `initial_budget`（繰り越し込み可処分）から同様に差し引く。いずれも**特別支出**（内部 `type = 'SPECIAL'`）の金額は母数に含めない。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
 - 支出登録のたびに `remainingToday` と `D_future` をZustandストアで即時更新し、UIに反映する。
 
 ### 4.3 光熱費の予算反映（通常サイクルのみ）

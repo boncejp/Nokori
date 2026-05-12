@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { validateOnboardingPayload, validateProfileSettingsPayload } from "./onboarding-validation";
+import { parseJstDateKeyToDate } from "./budget-logic";
 
 const VALID_PAYLOAD = {
   target_amount: "1000000",
@@ -87,26 +88,60 @@ describe("validateOnboardingPayload", () => {
 });
 
 describe("validateProfileSettingsPayload", () => {
+  const normalCycleContext = {
+    anchorLogicalDateKey: "2026-05-01",
+    logicalToday: parseJstDateKeyToDate("2026-06-15"),
+    existingInitialBudget: 120_000,
+  };
+
   it("オンボーディングと同形式のフィールドを検証する", () => {
-    const result = validateProfileSettingsPayload({
-      target_amount: "900000",
-      target_years: "1",
-      target_months: "0",
-      monthly_income: "280000",
-      payday: "25",
-      payday_rule: "FIXED",
-      fixed_costs: "70000",
-      estimated_electricity: "8000",
-      estimated_gas: "5000",
-      estimated_water: "3000",
-      surplus_mode: "YUTORI",
-      initial_budget: "100000",
-    });
+    const result = validateProfileSettingsPayload(
+      {
+        target_amount: "900000",
+        target_years: "1",
+        target_months: "0",
+        monthly_income: "280000",
+        payday: "25",
+        payday_rule: "FIXED",
+        fixed_costs: "70000",
+        estimated_electricity: "8000",
+        estimated_gas: "5000",
+        estimated_water: "3000",
+        surplus_mode: "YUTORI",
+        initial_budget: "100000",
+      },
+      normalCycleContext,
+    );
 
     expect(result.success).toBe(true);
     if (!result.success) {
       throw new Error("expected validation success");
     }
     expect(result.data.initial_budget).toBe(100_000);
+  });
+
+  it("通常サイクルで initial_budget を省略したときは既存値で検証する", () => {
+    const result = validateProfileSettingsPayload(
+      {
+        target_amount: "900000",
+        target_years: "1",
+        target_months: "0",
+        monthly_income: "280000",
+        payday: "25",
+        payday_rule: "FIXED",
+        fixed_costs: "70000",
+        estimated_electricity: "8000",
+        estimated_gas: "5000",
+        estimated_water: "3000",
+        surplus_mode: "STRICT",
+      },
+      normalCycleContext,
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error("expected validation success");
+    }
+    expect(result.data.initial_budget).toBe(120_000);
   });
 });

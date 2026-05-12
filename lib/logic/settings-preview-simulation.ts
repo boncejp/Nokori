@@ -3,8 +3,10 @@ import {
   calculateDaysUntilNextPayday,
   calculateMonthlySavingsQuota,
   calculateNextPayday,
+  calculateNextRemainingCycleBudget,
   calculateTargetDateFromDuration,
   type PaydayRule,
+  type SurplusMode,
   type UtilityEstimateMap,
 } from "@/lib/logic/budget-logic";
 import {
@@ -16,6 +18,8 @@ export type SettingsPreviewSnapshotSlice = {
   readonly confirmedNormalSpentBeforeToday: number;
   readonly todayTransactions: readonly DashboardPreviewTransaction[];
   readonly utilityEstimatesDb: UtilityEstimateMap;
+  /** 通常サイクル: 保存済み `initial_budget`（YUTORI の繰り越し反映後）。プレビューは編集草案ではなく DB 値を母数にする。 */
+  readonly initialBudgetDb: number;
 };
 
 export type SettingsBudgetPreviewDraft = {
@@ -28,6 +32,7 @@ export type SettingsBudgetPreviewDraft = {
   readonly estimatedElectricity: number;
   readonly estimatedGas: number;
   readonly estimatedWater: number;
+  readonly surplusMode: SurplusMode;
   readonly initialBudget: number;
 };
 
@@ -48,7 +53,9 @@ export type SettingsBudgetPreviewResult =
   | { readonly status: "unavailable" };
 
 /**
- * 設定保存前プレビュー: 初回は initial_budget のみが日次に効き、通常は surplus_mode / initial_budget を除く草案が反映される。
+ * 設定保存前プレビュー: 初回は `initial_budget` のみが日次に効く。
+ * 通常は草案の収支・光熱費が反映され、日次の母数は STRICT では基準サイクル予算、
+ * YUTORI では保存済み `initial_budget`（繰り越し込み）に合わせる。
  */
 export function calculateSettingsBudgetPreview(params: {
   readonly previewKind: "first" | "normal";
@@ -153,7 +160,13 @@ export function calculateSettingsBudgetPreview(params: {
     monthlySavingsQuota,
   });
 
-  const remainingCycleBudget = baseCycleBudget - snapshot.confirmedNormalSpentBeforeToday;
+  const remainingCycleBudget = calculateNextRemainingCycleBudget({
+    isFirstCycle: false,
+    surplusMode: draft.surplusMode,
+    initialBudget: snapshot.initialBudgetDb,
+    baseCycleBudget,
+    confirmedNormalSpentBeforeToday: snapshot.confirmedNormalSpentBeforeToday,
+  });
 
   const utilityEstimatesForPreview: UtilityEstimateMap = {
     ELECTRICITY: draft.estimatedElectricity,

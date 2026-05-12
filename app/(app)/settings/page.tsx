@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 
 import { SettingsClient } from "@/components/features/SettingsClient";
 import {
+  calculateBaseCycleBudget,
   calculateMonthlySavingsQuota,
+  calculateYutoriCarryoverDisplay,
   getLogicalDate,
   isWithinFirstCycle,
   parseJstDateKeyToDate,
@@ -72,6 +74,27 @@ export default async function SettingsPage() {
       })
     : null;
 
+  const baseCycleBudgetSaved =
+    monthlySavingsQuota !== null
+      ? calculateBaseCycleBudget({
+          monthlyIncome: profile.monthly_income,
+          fixedCosts: profile.fixed_costs,
+          estimatedElectricity: profile.estimated_electricity,
+          estimatedGas: profile.estimated_gas,
+          estimatedWater: profile.estimated_water,
+          monthlySavingsQuota,
+        })
+      : null;
+
+  const yutoriCarryoverDisplayYen =
+    baseCycleBudgetSaved !== null
+      ? calculateYutoriCarryoverDisplay({
+          surplusMode: profile.surplus_mode,
+          initialBudget: profile.initial_budget,
+          baseCycleBudget: baseCycleBudgetSaved,
+        })
+      : null;
+
   const logicalTodayKey = previewSnapshot?.logicalTodayKey ?? toJstDateString(logicalNow);
 
   return (
@@ -95,10 +118,12 @@ export default async function SettingsPage() {
         }}
         monthlySavingsQuota={monthlySavingsQuota}
         showMonthlySavingsQuota={!isFirstCycle}
+        yutoriCarryoverDisplayYen={yutoriCarryoverDisplayYen}
         previewContext={{
           anchorLogicalDateKey: profile.target_anchor_logical_date,
           logicalTodayKey,
           isFirstCycle,
+          initialBudgetDb: profile.initial_budget,
           previewSnapshot,
         }}
       />

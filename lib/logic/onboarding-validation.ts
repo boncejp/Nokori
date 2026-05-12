@@ -1,3 +1,5 @@
+import { isWithinFirstCycle, parseJstDateKeyToDate } from "@/lib/logic/budget-logic";
+
 export const PAYDAY_RULE_VALUES = ["BEFORE", "AFTER", "FIXED"] as const;
 export const SURPLUS_MODE_VALUES = ["STRICT", "YUTORI"] as const;
 
@@ -23,6 +25,13 @@ export type OnboardingProfileInput = {
 
 /** 設定画面 PATCH 用（全財産はサーバー側の既存値を維持し、フォームからは送らない） */
 export type ProfileSettingsFormInput = Omit<OnboardingProfileInput, "initial_total_assets">;
+
+/** `validateProfileSettingsPayload` で初回判定・通常時の initial_budget 省略に使う。 */
+export type ProfileSettingsValidationContext = {
+  readonly anchorLogicalDateKey: string;
+  readonly logicalToday: Date;
+  readonly existingInitialBudget: number;
+};
 
 type ValidationResult<T> =
   | { success: true; data: T }
@@ -171,7 +180,10 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
   };
 }
 
-export function validateProfileSettingsPayload(rawPayload: unknown): ValidationResult<ProfileSettingsFormInput> {
+export function validateProfileSettingsPayload(
+  rawPayload: unknown,
+  context: ProfileSettingsValidationContext,
+): ValidationResult<ProfileSettingsFormInput> {
   if (!isRecord(rawPayload)) {
     return { success: false, errorMessage: "送信データの形式が不正です。" };
   }
@@ -227,12 +239,41 @@ export function validateProfileSettingsPayload(rawPayload: unknown): ValidationR
   const surplusModeResult = parseSurplusMode(rawPayload.surplus_mode);
   if (!surplusModeResult.success) return surplusModeResult;
 
-  const initialBudgetResult = parseNumberField(
-    rawPayload,
-    "initial_budget",
-    "次の給料日まで使う予算",
-  );
-  if (!initialBudgetResult.success) return initialBudgetResult;
+  const anchorLogicalDate = parseJstDateKeyToDate(context.anchorLogicalDateKey);
+  const withinFirstCycle = isWithinFirstCycle({
+    anchorLogicalDate,
+    referenceDate: context.logicalToday,
+    payday: paydayResult.data,
+    paydayRule: paydayRuleResult.data,
+  });
+
+  let initialBudget: number;
+  if (withinFirstCycle) {
+    const initialBudgetResult = parseNumberField(
+      rawPayload,
+      "initial_budget",
+      "次の給料日まで使う予算",
+    );
+    if (!initialBudgetResult.success) return initialBudgetResult;
+    initialBudget = initialBudgetResult.data;
+  } else {
+    const rawInitial = rawPayload.initial_budget;
+    const isMissing =
+      typeof rawInitial === "undefined" ||
+      rawInitial === null ||
+      (typeof rawInitial === "string" && rawInitial.trim().length === 0);
+    if (isMissing) {
+      initialBudget = context.existingInitialBudget;
+    } else {
+      const initialBudgetResult = parseNumberField(
+        rawPayload,
+        "initial_budget",
+        "次の給料日まで使う予算",
+      );
+      if (!initialBudgetResult.success) return initialBudgetResult;
+      initialBudget = initialBudgetResult.data;
+    }
+  }
 
   return {
     success: true,
@@ -249,7 +290,7 @@ export function validateProfileSettingsPayload(rawPayload: unknown): ValidationR
       estimated_gas: estimatedGasResult.data,
       estimated_water: estimatedWaterResult.data,
       surplus_mode: surplusModeResult.data,
-      initial_budget: initialBudgetResult.data,
+      initial_budget: initialBudget,
     },
   };
 }

@@ -289,6 +289,7 @@ export async function resolveDashboardCycle(params: {
   });
   const remainingCycleBudget = calculateNextRemainingCycleBudget({
     isFirstCycle: isFirstCycleToday,
+    surplusMode: profile.surplus_mode,
     initialBudget: profile.initial_budget,
     baseCycleBudget,
     confirmedNormalSpentBeforeToday: confirmedSpendResult.data,

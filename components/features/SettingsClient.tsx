@@ -38,6 +38,8 @@ type PreviewContext = {
   readonly anchorLogicalDateKey: string;
   readonly logicalTodayKey: string;
   readonly isFirstCycle: boolean;
+  /** 保存済み `initial_budget`（通常サイクルのプレビュー母数に使用） */
+  readonly initialBudgetDb: number;
   readonly previewSnapshot: SettingsPreviewSnapshot | null;
 };
 
@@ -45,6 +47,8 @@ type SettingsClientProps = {
   readonly initialValues: SettingsFormValues;
   readonly monthlySavingsQuota: number | null;
   readonly showMonthlySavingsQuota: boolean;
+  /** YUTORI かつ繰り越しが正のときのみ円。STRICT または繰り越しなしは null。 */
+  readonly yutoriCarryoverDisplayYen: number | null;
   readonly previewContext: PreviewContext;
 };
 
@@ -54,6 +58,7 @@ export function SettingsClient({
   initialValues,
   monthlySavingsQuota,
   showMonthlySavingsQuota,
+  yutoriCarryoverDisplayYen,
   previewContext,
 }: SettingsClientProps) {
   const [formValues, setFormValues] = useState<SettingsFormValues>(initialValues);
@@ -101,7 +106,7 @@ export function SettingsClient({
     if (previewContext.previewSnapshot === null) {
       return null;
     }
-    const draft = parseDraftFromForm(formValues);
+    const draft = parseDraftFromForm(formValues, previewContext);
     if (draft === null) {
       return null;
     }
@@ -114,6 +119,7 @@ export function SettingsClient({
         confirmedNormalSpentBeforeToday: previewContext.previewSnapshot.confirmedNormalSpentBeforeToday,
         todayTransactions: previewContext.previewSnapshot.todayTransactions,
         utilityEstimatesDb: previewContext.previewSnapshot.utilityEstimatesDb,
+        initialBudgetDb: previewContext.previewSnapshot.initialBudgetDb,
       },
       firstCycleCalendar: previewContext.previewSnapshot.firstCycleCalendar,
       draft,
@@ -146,7 +152,7 @@ export function SettingsClient({
           estimated_gas: formValues.estimated_gas,
           estimated_water: formValues.estimated_water,
           surplus_mode: formValues.surplus_mode,
-          initial_budget: formValues.initial_budget,
+          ...(previewContext.isFirstCycle ? { initial_budget: formValues.initial_budget } : {}),
         }),
       });
       const body: unknown = await response.json();
@@ -285,12 +291,21 @@ export function SettingsClient({
             }))}
             onChange={handleChangeValue}
           />
-          <NumberField
-            label="次の給料日まで使う予算（サイクル基準）"
-            name="initial_budget"
-            value={formValues.initial_budget}
-            onChange={handleChangeValue}
-          />
+          {yutoriCarryoverDisplayYen !== null ? (
+            <ReadOnlyField
+              label="前月からの繰り越し（参考）"
+              value={formatCurrencyYen(yutoriCarryoverDisplayYen)}
+              helperText="直近の給料日リセット後の基準サイクル予算を超えた分（max(0, 保存済み initial_budget − 基準サイクル予算)）。編集はできません。"
+            />
+          ) : null}
+          {previewContext.isFirstCycle ? (
+            <NumberField
+              label="次の給料日まで使う予算（サイクル基準）"
+              name="initial_budget"
+              value={formValues.initial_budget}
+              onChange={handleChangeValue}
+            />
+          ) : null}
         </div>
 
         <SettingsPreviewSection
@@ -354,7 +369,8 @@ function SettingsPreviewSection(props: {
       ) : (
         <p className="mt-2 text-sm text-indigo-900">
           <strong>通常サイクル:</strong>{" "}
-          余剰金モードと「次の給料日まで使う予算」以外の編集項目がプレビューに反映されます（日次の母数は基準サイクル予算ベース）。貯金総額と今日までの確定支出・当日トランザクションは実データ固定です。
+          収入・固定費・光熱費概算・達成条件の草案がプレビューに反映されます。日次の母数は STRICT では基準サイクル予算、YUTORI
+          では給料日リセットで確定した保存済みサイクル枠（繰り越し込み）です。貯金総額と今日までの確定支出・当日トランザクションは実データ固定です。
         </p>
       )}
 
@@ -398,7 +414,10 @@ function SettingsPreviewSection(props: {
   );
 }
 
-function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPreviewDraft | null {
+function parseDraftFromForm(
+  formValues: SettingsFormValues,
+  previewContext: PreviewContext,
+): SettingsBudgetPreviewDraft | null {
   const targetAmount = Number(formValues.target_amount);
   const years = Number(formValues.target_years);
   const months = Number(formValues.target_months);
@@ -408,7 +427,8 @@ function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPrevi
   const estimatedElectricity = Number(formValues.estimated_electricity);
   const estimatedGas = Number(formValues.estimated_gas);
   const estimatedWater = Number(formValues.estimated_water);
-  const initialBudget = Number(formValues.initial_budget);
+  const initialBudgetFromForm = Number(formValues.initial_budget);
+  const initialBudget = previewContext.isFirstCycle ? initialBudgetFromForm : previewContext.initialBudgetDb;
 
   const numericFields = [
     targetAmount,
@@ -420,7 +440,7 @@ function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPrevi
     estimatedElectricity,
     estimatedGas,
     estimatedWater,
-    initialBudget,
+    ...(previewContext.isFirstCycle ? [initialBudgetFromForm] : []),
   ];
   if (!numericFields.every((value) => Number.isFinite(value))) {
     return null;
@@ -428,7 +448,14 @@ function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPrevi
 
   const durationMonths = years * 12 + months;
   const matchedRule = PAYDAY_RULE_VALUES.find((value) => value === formValues.payday_rule);
-  if (typeof matchedRule === "undefined" || durationMonths < 1 || payday < 1 || payday > 31) {
+  const matchedSurplus = SURPLUS_MODE_VALUES.find((value) => value === formValues.surplus_mode);
+  if (
+    typeof matchedRule === "undefined" ||
+    typeof matchedSurplus === "undefined" ||
+    durationMonths < 1 ||
+    payday < 1 ||
+    payday > 31
+  ) {
     return null;
   }
 
@@ -442,6 +469,7 @@ function parseDraftFromForm(formValues: SettingsFormValues): SettingsBudgetPrevi
     estimatedElectricity,
     estimatedGas,
     estimatedWater,
+    surplusMode: matchedSurplus,
     initialBudget,
   };
 }

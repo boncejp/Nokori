@@ -313,6 +313,8 @@ export function calculateBaseCycleBudget(params: {
  * 設定更新時に保存すべき initial_budget を決定する。
  * 初回サイクル中はオンボーディングで確定した初回開始予算を保持し、
  * ユーザーが明示的に初回開始予算を変更した場合のみ反映する。
+ * 通常サイクルでは `initial_budget` は月次リセット・給料日モーダル等で維持され、
+ * 設定 PATCH では既存値を上書きしない。
  */
 export function resolveInitialBudgetForSettingsUpdate(params: {
   readonly isWithinFirstCycle: boolean;
@@ -322,7 +324,7 @@ export function resolveInitialBudgetForSettingsUpdate(params: {
   const { isWithinFirstCycle, existingInitialBudget, submittedInitialBudget } = params;
 
   if (!isWithinFirstCycle) {
-    return submittedInitialBudget;
+    return existingInitialBudget;
   }
 
   if (submittedInitialBudget !== existingInitialBudget) {
@@ -330,6 +332,21 @@ export function resolveInitialBudgetForSettingsUpdate(params: {
   }
 
   return existingInitialBudget;
+}
+
+/**
+ * YUTORI 時に「基準サイクル予算を超えた `initial_budget`」を繰り越し分として表示する（読み取り専用 UI 用）。
+ * STRICT では常に null（定義しない）。
+ */
+export function calculateYutoriCarryoverDisplay(params: {
+  readonly surplusMode: SurplusMode;
+  readonly initialBudget: number;
+  readonly baseCycleBudget: number;
+}): number | null {
+  if (params.surplusMode !== "YUTORI") {
+    return null;
+  }
+  return Math.max(0, params.initialBudget - params.baseCycleBudget);
 }
 
 /**
@@ -381,16 +398,22 @@ export function isFirstCycleInitialBudgetExceedingTotalAssets(params: {
 }
 
 /**
- * 次サイクルのremainingCycleBudgetを算出する。
+ * 次サイクルの remainingCycleBudget（当日・翌日以降の日次の分子）を算出する。
+ * 初回は `initial_budget` のみ。通常サイクルは STRICT では基準サイクル予算、
+ * YUTORI では月次リセットで確定した `initial_budget`（繰り越し込み可処分）を母数とする。
  */
 export function calculateNextRemainingCycleBudget(params: {
   readonly isFirstCycle: boolean;
+  readonly surplusMode: SurplusMode;
   readonly initialBudget: number;
   readonly baseCycleBudget: number;
   readonly confirmedNormalSpentBeforeToday: number;
 }): number {
-  const { isFirstCycle, initialBudget, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
+  const { isFirstCycle, surplusMode, initialBudget, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
   if (isFirstCycle) {
+    return initialBudget - confirmedNormalSpentBeforeToday;
+  }
+  if (surplusMode === "YUTORI") {
     return initialBudget - confirmedNormalSpentBeforeToday;
   }
   return baseCycleBudget - confirmedNormalSpentBeforeToday;
