@@ -349,7 +349,7 @@ function SettingsPreviewSection(props: {
       {isFirstCycle ? (
         <p className="mt-2 text-sm text-indigo-900">
           <strong>初回サイクル:</strong>{" "}
-          当日・翌日以降の日次プレビューは「次の給料日まで使う予算」だけが反映されます。他の項目を変えても日次は原則変わりません。月次貯金ノルマは計算上表示しますが、初回の日次の母数には使われません。
+          当日・翌日以降の日次プレビューは「次の給料日まで使う予算」だけが反映されます。他の項目を変えても日次は原則変わりません。月次貯金ノルマは通常サイクル（2回目以降）から適用されるため、このフェーズではプレビューに含めていません。
         </p>
       ) : (
         <p className="mt-2 text-sm text-indigo-900">
@@ -367,7 +367,11 @@ function SettingsPreviewSection(props: {
       ) : previewMetrics.status === "unavailable" ? (
         <p className="mt-3 text-sm text-zinc-700">この入力ではプレビューを計算できません（—）。</p>
       ) : (
-        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+        <dl
+          className={`mt-3 grid gap-3 ${
+            previewMetrics.previewKind === "normal" ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          }`}
+        >
           <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
             <dt className="text-xs font-medium text-zinc-500">当日予算（目安）</dt>
             <dd className="text-lg font-semibold tabular-nums text-indigo-950">
@@ -380,12 +384,14 @@ function SettingsPreviewSection(props: {
               {formatCurrencyYen(previewMetrics.futureDailyBudget)}
             </dd>
           </div>
-          <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
-            <dt className="text-xs font-medium text-zinc-500">月次貯金ノルマ（プレビュー）</dt>
-            <dd className="text-lg font-semibold tabular-nums text-indigo-950">
-              {formatCurrencyYen(previewMetrics.monthlySavingsQuota)}
-            </dd>
-          </div>
+          {previewMetrics.previewKind === "normal" ? (
+            <div className="rounded-md border border-indigo-100 bg-white px-3 py-2">
+              <dt className="text-xs font-medium text-zinc-500">月次貯金ノルマ（プレビュー）</dt>
+              <dd className="text-lg font-semibold tabular-nums text-indigo-950">
+                {formatCurrencyYen(previewMetrics.monthlySavingsQuota)}
+              </dd>
+            </div>
+          ) : null}
         </dl>
       )}
     </section>

@@ -34,6 +34,13 @@ export type SettingsBudgetPreviewDraft = {
 export type SettingsBudgetPreviewResult =
   | {
       readonly status: "ok";
+      readonly previewKind: "first";
+      readonly dailyBudgetToday: number;
+      readonly futureDailyBudget: number;
+    }
+  | {
+      readonly status: "ok";
+      readonly previewKind: "normal";
       readonly dailyBudgetToday: number;
       readonly futureDailyBudget: number;
       readonly monthlySavingsQuota: number;
@@ -58,6 +65,39 @@ export function calculateSettingsBudgetPreview(params: {
   const { previewKind, logicalToday, anchorLogicalDate, currentTotalSavingsDb, snapshot, firstCycleCalendar, draft } =
     params;
 
+  if (previewKind === "first") {
+    if (firstCycleCalendar === null) {
+      return { status: "unavailable" };
+    }
+    const { daysUntilNextPaydayIncludingToday, daysUntilNextPaydayExcludingToday } = firstCycleCalendar;
+    if (daysUntilNextPaydayIncludingToday <= 0) {
+      return { status: "unavailable" };
+    }
+
+    const remainingCycleBudget = draft.initialBudget - snapshot.confirmedNormalSpentBeforeToday;
+    const utilityEstimatesForPreview: UtilityEstimateMap = snapshot.utilityEstimatesDb;
+
+    try {
+      const metrics = calculateDashboardCycleMetrics({
+        remainingCycleBudget,
+        daysUntilNextPaydayIncludingToday,
+        daysUntilNextPaydayExcludingToday,
+        utilityEstimates: utilityEstimatesForPreview,
+        transactions: snapshot.todayTransactions,
+        isFirstCycle: true,
+      });
+
+      return {
+        status: "ok",
+        previewKind: "first",
+        dailyBudgetToday: metrics.dailyBudgetToday,
+        futureDailyBudget: metrics.futureDailyBudget,
+      };
+    } catch {
+      return { status: "unavailable" };
+    }
+  }
+
   let targetDate: Date;
   try {
     targetDate = calculateTargetDateFromDuration({
@@ -77,36 +117,27 @@ export function calculateSettingsBudgetPreview(params: {
     referenceDate: logicalToday,
   });
 
+  let nextPayday: Date;
   let daysUntilNextPaydayIncludingToday: number;
   let daysUntilNextPaydayExcludingToday: number;
-
-  if (previewKind === "first") {
-    if (firstCycleCalendar === null) {
-      return { status: "unavailable" };
-    }
-    daysUntilNextPaydayIncludingToday = firstCycleCalendar.daysUntilNextPaydayIncludingToday;
-    daysUntilNextPaydayExcludingToday = firstCycleCalendar.daysUntilNextPaydayExcludingToday;
-  } else {
-    let nextPayday: Date;
-    try {
-      nextPayday = calculateNextPayday({
-        fromDate: logicalToday,
-        payday: draft.payday,
-        paydayRule: draft.paydayRule,
-      });
-      daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-        fromDate: logicalToday,
-        nextPayday,
-        includeToday: true,
-      });
-      daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-        fromDate: logicalToday,
-        nextPayday,
-        includeToday: false,
-      });
-    } catch {
-      return { status: "unavailable" };
-    }
+  try {
+    nextPayday = calculateNextPayday({
+      fromDate: logicalToday,
+      payday: draft.payday,
+      paydayRule: draft.paydayRule,
+    });
+    daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday,
+      includeToday: true,
+    });
+    daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday,
+      includeToday: false,
+    });
+  } catch {
+    return { status: "unavailable" };
   }
 
   if (daysUntilNextPaydayIncludingToday <= 0) {
@@ -122,19 +153,13 @@ export function calculateSettingsBudgetPreview(params: {
     monthlySavingsQuota,
   });
 
-  const remainingCycleBudget =
-    previewKind === "first"
-      ? draft.initialBudget - snapshot.confirmedNormalSpentBeforeToday
-      : baseCycleBudget - snapshot.confirmedNormalSpentBeforeToday;
+  const remainingCycleBudget = baseCycleBudget - snapshot.confirmedNormalSpentBeforeToday;
 
-  const utilityEstimatesForPreview: UtilityEstimateMap =
-    previewKind === "first"
-      ? snapshot.utilityEstimatesDb
-      : {
-          ELECTRICITY: draft.estimatedElectricity,
-          GAS: draft.estimatedGas,
-          WATER: draft.estimatedWater,
-        };
+  const utilityEstimatesForPreview: UtilityEstimateMap = {
+    ELECTRICITY: draft.estimatedElectricity,
+    GAS: draft.estimatedGas,
+    WATER: draft.estimatedWater,
+  };
 
   try {
     const metrics = calculateDashboardCycleMetrics({
@@ -143,11 +168,12 @@ export function calculateSettingsBudgetPreview(params: {
       daysUntilNextPaydayExcludingToday,
       utilityEstimates: utilityEstimatesForPreview,
       transactions: snapshot.todayTransactions,
-      isFirstCycle: previewKind === "first",
+      isFirstCycle: false,
     });
 
     return {
       status: "ok",
+      previewKind: "normal",
       dailyBudgetToday: metrics.dailyBudgetToday,
       futureDailyBudget: metrics.futureDailyBudget,
       monthlySavingsQuota,

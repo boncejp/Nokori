@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { parseJstDateKeyToDate } from "@/lib/logic/budget-logic";
+import * as budgetLogic from "./budget-logic";
 
 import { calculateSettingsBudgetPreview } from "./settings-preview-simulation";
 
@@ -16,8 +16,8 @@ const EMPTY_SNAPSHOT = {
 
 describe("calculateSettingsBudgetPreview", () => {
   it("初回サイクルでは initial_budget を変えると当日・翌日以降プレビューが変わる", () => {
-    const logicalToday = parseJstDateKeyToDate("2026-05-12");
-    const anchorLogicalDate = parseJstDateKeyToDate("2026-05-01");
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
 
     const low = calculateSettingsBudgetPreview({
       previewKind: "first",
@@ -73,14 +73,15 @@ describe("calculateSettingsBudgetPreview", () => {
       return;
     }
 
+    expect(low.previewKind).toBe("first");
+    expect(high.previewKind).toBe("first");
     expect(low.dailyBudgetToday).toBe(4_000);
     expect(high.dailyBudgetToday).toBe(7_000);
-    expect(low.monthlySavingsQuota).toBe(high.monthlySavingsQuota);
   });
 
   it("初回サイクルでは fixed_costs を変えても日次プレビューは変わらない（ノルマも目標・期間が同じなら同じ）", () => {
-    const logicalToday = parseJstDateKeyToDate("2026-05-12");
-    const anchorLogicalDate = parseJstDateKeyToDate("2026-05-01");
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
 
     const a = calculateSettingsBudgetPreview({
       previewKind: "first",
@@ -138,12 +139,13 @@ describe("calculateSettingsBudgetPreview", () => {
 
     expect(a.dailyBudgetToday).toBe(b.dailyBudgetToday);
     expect(a.futureDailyBudget).toBe(b.futureDailyBudget);
-    expect(a.monthlySavingsQuota).toBe(b.monthlySavingsQuota);
+    expect(a.previewKind).toBe("first");
+    expect(b.previewKind).toBe("first");
   });
 
   it("通常サイクルでは surplus_mode / initial_budget 以外の変更が日次・ノルマに反映される", () => {
-    const logicalToday = parseJstDateKeyToDate("2026-05-12");
-    const anchorLogicalDate = parseJstDateKeyToDate("2026-05-01");
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
 
     const baseDraft = {
       targetAmount: 2_000_000,
@@ -198,6 +200,11 @@ describe("calculateSettingsBudgetPreview", () => {
       return;
     }
 
+    expect(tighterFixed.previewKind).toBe("normal");
+    expect(looserFixed.previewKind).toBe("normal");
+    if (tighterFixed.previewKind !== "normal" || looserFixed.previewKind !== "normal") {
+      return;
+    }
     expect(tighterFixed.dailyBudgetToday).not.toBe(looserFixed.dailyBudgetToday);
     expect(tighterFixed.futureDailyBudget).not.toBe(looserFixed.futureDailyBudget);
     expect(tighterFixed.monthlySavingsQuota).toBe(looserFixed.monthlySavingsQuota);
@@ -225,7 +232,70 @@ describe("calculateSettingsBudgetPreview", () => {
       return;
     }
 
+    expect(differentInitialBudget.previewKind).toBe("normal");
     expect(differentInitialBudget.dailyBudgetToday).toBe(looserFixed.dailyBudgetToday);
     expect(differentInitialBudget.futureDailyBudget).toBe(looserFixed.futureDailyBudget);
+  });
+
+  it("初回プレビューでは calculateBaseCycleBudget と calculateMonthlySavingsQuota を呼ばない", () => {
+    const baseSpy = vi.spyOn(budgetLogic, "calculateBaseCycleBudget");
+    const quotaSpy = vi.spyOn(budgetLogic, "calculateMonthlySavingsQuota");
+
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
+
+    calculateSettingsBudgetPreview({
+      previewKind: "first",
+      logicalToday,
+      anchorLogicalDate,
+      currentTotalSavingsDb: 400_000,
+      snapshot: EMPTY_SNAPSHOT,
+      firstCycleCalendar: {
+        daysUntilNextPaydayIncludingToday: 10,
+        daysUntilNextPaydayExcludingToday: 9,
+      },
+      draft: {
+        targetAmount: 2_000_000,
+        targetDurationMonths: 12,
+        monthlyIncome: 350_000,
+        payday: 25,
+        paydayRule: "FIXED",
+        fixedCosts: 120_000,
+        estimatedElectricity: 5_000,
+        estimatedGas: 5_000,
+        estimatedWater: 5_000,
+        initialBudget: 50_000,
+      },
+    });
+
+    expect(baseSpy).not.toHaveBeenCalled();
+    expect(quotaSpy).not.toHaveBeenCalled();
+
+    calculateSettingsBudgetPreview({
+      previewKind: "normal",
+      logicalToday,
+      anchorLogicalDate,
+      currentTotalSavingsDb: 400_000,
+      snapshot: EMPTY_SNAPSHOT,
+      firstCycleCalendar: null,
+      draft: {
+        targetAmount: 2_000_000,
+        targetDurationMonths: 12,
+        monthlyIncome: 350_000,
+        payday: 25,
+        paydayRule: "FIXED",
+        fixedCosts: 120_000,
+        estimatedElectricity: 5_000,
+        estimatedGas: 5_000,
+        estimatedWater: 5_000,
+        initialBudget: 50_000,
+      },
+    });
+
+    expect(baseSpy).toHaveBeenCalledTimes(1);
+    expect(quotaSpy).toHaveBeenCalledTimes(1);
+
+    baseSpy.mockRestore();
+    quotaSpy.mockRestore();
   });
 });
