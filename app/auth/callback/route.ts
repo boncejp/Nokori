@@ -4,6 +4,13 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+  const oauthError = requestUrl.searchParams.get("error");
+  if (typeof oauthError === "string" && oauthError.length > 0) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("auth_error", "oauth");
+    return NextResponse.redirect(loginUrl);
+  }
+
   const code = requestUrl.searchParams.get("code");
 
   if (typeof code === "string" && code.length > 0) {

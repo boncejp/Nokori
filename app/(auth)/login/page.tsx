@@ -4,7 +4,16 @@ import { LoginForm } from "@/components/features/LoginForm";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ auth_error?: string | string[] }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const authErrorRaw = resolvedSearchParams.auth_error;
+  const authErrorValue = Array.isArray(authErrorRaw) ? authErrorRaw[0] : authErrorRaw;
+  const authErrorFromCallback = authErrorValue === "oauth";
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -23,10 +32,10 @@ export default async function LoginPage() {
       <div className="w-full max-w-md space-y-2">
         <h1 className="text-2xl font-semibold">Nokori にログイン</h1>
         <p className="text-sm text-zinc-600">
-          メールリンクでログインできます。初回ログイン後はオンボーディングに進みます。
+          メールリンクまたは Google でログインできます。初回ログイン後はオンボーディングに進みます。
         </p>
       </div>
-      <LoginForm />
+      <LoginForm authErrorFromCallback={authErrorFromCallback} />
     </main>
   );
 }
