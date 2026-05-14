@@ -12,7 +12,6 @@ export type OnboardingProfileInput = {
   readonly target_months: number;
   readonly target_duration_months: number;
   readonly initial_total_assets: number;
-  readonly monthly_income: number;
   readonly payday: number;
   readonly payday_rule: PaydayRule;
   readonly fixed_costs: number;
@@ -24,13 +23,17 @@ export type OnboardingProfileInput = {
 };
 
 /** 設定画面 PATCH 用（全財産はサーバー側の既存値を維持し、フォームからは送らない） */
-export type ProfileSettingsFormInput = Omit<OnboardingProfileInput, "initial_total_assets">;
+export type ProfileSettingsFormInput = Omit<OnboardingProfileInput, "initial_total_assets"> & {
+  readonly monthly_income: number;
+};
 
 /** `validateProfileSettingsPayload` で初回判定・通常時の initial_budget 省略に使う。 */
 export type ProfileSettingsValidationContext = {
   readonly anchorLogicalDateKey: string;
   readonly logicalToday: Date;
   readonly existingInitialBudget: number;
+  /** 初回サイクルでは月収フィールドを出さないため、未送信時はこの値を採用する。 */
+  readonly existingMonthlyIncome: number;
 };
 
 type ValidationResult<T> =
@@ -113,9 +116,6 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
   const initialTotalAssetsResult = parseNumberField(rawPayload, "initial_total_assets", "現在の全財産");
   if (!initialTotalAssetsResult.success) return initialTotalAssetsResult;
 
-  const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収");
-  if (!monthlyIncomeResult.success) return monthlyIncomeResult;
-
   const paydayResult = parseNumberField(rawPayload, "payday", "給料日");
   if (!paydayResult.success) return paydayResult;
   if (paydayResult.data < 1 || paydayResult.data > 31) {
@@ -167,7 +167,6 @@ export function validateOnboardingPayload(rawPayload: unknown): ValidationResult
       target_months: targetMonthsResult.data,
       target_duration_months: targetDurationMonths,
       initial_total_assets: initialTotalAssetsResult.data,
-      monthly_income: monthlyIncomeResult.data,
       payday: paydayResult.data,
       payday_rule: paydayRuleResult.data,
       fixed_costs: fixedCostsResult.data,
@@ -208,9 +207,6 @@ export function validateProfileSettingsPayload(
     return { success: false, errorMessage: "達成期限は1か月以上になるように選択してください。" };
   }
 
-  const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収");
-  if (!monthlyIncomeResult.success) return monthlyIncomeResult;
-
   const paydayResult = parseNumberField(rawPayload, "payday", "給料日");
   if (!paydayResult.success) return paydayResult;
   if (paydayResult.data < 1 || paydayResult.data > 31) {
@@ -247,6 +243,26 @@ export function validateProfileSettingsPayload(
     paydayRule: paydayRuleResult.data,
   });
 
+  let monthlyIncome: number;
+  if (withinFirstCycle) {
+    const rawMonthly = rawPayload.monthly_income;
+    const isMissing =
+      typeof rawMonthly === "undefined" ||
+      rawMonthly === null ||
+      (typeof rawMonthly === "string" && rawMonthly.trim().length === 0);
+    if (isMissing) {
+      monthlyIncome = context.existingMonthlyIncome;
+    } else {
+      const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+      if (!monthlyIncomeResult.success) return monthlyIncomeResult;
+      monthlyIncome = monthlyIncomeResult.data;
+    }
+  } else {
+    const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+    if (!monthlyIncomeResult.success) return monthlyIncomeResult;
+    monthlyIncome = monthlyIncomeResult.data;
+  }
+
   let initialBudget: number;
   if (withinFirstCycle) {
     const initialBudgetResult = parseNumberField(
@@ -282,7 +298,7 @@ export function validateProfileSettingsPayload(
       target_years: targetYearsResult.data,
       target_months: targetMonthsResult.data,
       target_duration_months: targetDurationMonths,
-      monthly_income: monthlyIncomeResult.data,
+      monthly_income: monthlyIncome,
       payday: paydayResult.data,
       payday_rule: paydayRuleResult.data,
       fixed_costs: fixedCostsResult.data,

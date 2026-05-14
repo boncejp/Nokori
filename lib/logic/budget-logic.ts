@@ -18,7 +18,8 @@ export type UtilityType = "ELECTRICITY" | "GAS" | "WATER";
 
 export type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
-function toJstStartOfDay(date: Date): Date {
+/** JST の暦日の開始（00:00）を表す `Date` に正規化する。論理日キーとの比較・範囲クエリに使う。 */
+export function toJstStartOfDay(date: Date): Date {
   const jstDate = toZonedTime(date, TIMEZONE);
   const jstStart = startOfDay(jstDate);
   return fromZonedTime(jstStart, TIMEZONE);
@@ -574,16 +575,15 @@ export function calculateTargetDateFromDuration(params: {
 }
 
 /**
- * 初回サイクル中かどうかを判定する。
- * 初回サイクル = target_anchor_logical_date（論理日）から最初の給料日前日まで。
+ * 初回サイクルの終了日（論理日）= オンボ完了後「最初の給料日」の前日。
+ * `isWithinFirstCycle` と履歴の集計範囲で共通利用する。
  */
-export function isWithinFirstCycle(params: {
+export function getFirstCycleEndLogicalDate(params: {
   readonly anchorLogicalDate: Date;
-  readonly referenceDate: Date;
   readonly payday: number;
   readonly paydayRule: PaydayRule;
-}): boolean {
-  const { anchorLogicalDate, referenceDate, payday, paydayRule } = params;
+}): Date {
+  const { anchorLogicalDate, payday, paydayRule } = params;
   const anchorString = toJstDateString(anchorLogicalDate);
   const firstCandidatePayday = calculateNextPayday({
     fromDate: anchorLogicalDate,
@@ -599,11 +599,59 @@ export function isWithinFirstCycle(params: {
           paydayRule,
         })
       : firstCandidatePayday;
-  const firstCycleEndDate = subDays(firstPaydayAfterOnboarding, 1);
+  return toJstStartOfDay(subDays(firstPaydayAfterOnboarding, 1));
+}
+
+/**
+ * 初回サイクル中かどうかを判定する。
+ * 初回サイクル = target_anchor_logical_date（論理日）から最初の給料日前日まで。
+ */
+export function isWithinFirstCycle(params: {
+  readonly anchorLogicalDate: Date;
+  readonly referenceDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): boolean {
+  const { anchorLogicalDate, referenceDate, payday, paydayRule } = params;
+  const anchorString = toJstDateString(anchorLogicalDate);
+  const firstCycleEndDate = getFirstCycleEndLogicalDate({ anchorLogicalDate, payday, paydayRule });
   const referenceDateString = toJstDateString(referenceDate);
   const firstCycleEndDateString = toJstDateString(firstCycleEndDate);
 
   return referenceDateString >= anchorString && referenceDateString <= firstCycleEndDateString;
+}
+
+/**
+ * 履歴一覧に含める論理日の範囲（両端含む）。
+ * 初回: アンカー論理日〜初回サイクル終了論理日。通常: サイクル開始の給料日〜次の給料日前日。
+ */
+export function getHistoryListingLogicalDateRange(params: {
+  readonly logicalToday: Date;
+  readonly anchorLogicalDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+  readonly isFirstCycle: boolean;
+}): { readonly from: Date; readonly to: Date } {
+  if (params.isFirstCycle) {
+    return {
+      from: toJstStartOfDay(params.anchorLogicalDate),
+      to: getFirstCycleEndLogicalDate({
+        anchorLogicalDate: params.anchorLogicalDate,
+        payday: params.payday,
+        paydayRule: params.paydayRule,
+      }),
+    };
+  }
+
+  const window = calculateCycleWindow({
+    referenceDate: params.logicalToday,
+    payday: params.payday,
+    paydayRule: params.paydayRule,
+  });
+  return {
+    from: window.cycleStartDate,
+    to: toJstStartOfDay(subDays(window.nextPaydayDate, 1)),
+  };
 }
 
 /**

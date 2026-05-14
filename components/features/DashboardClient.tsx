@@ -57,7 +57,7 @@ const TRANSACTION_KIND_OPTIONS: readonly {
     value: "UTILITY",
     label: "光熱費",
     shortLabel: "光熱",
-    tooltip: "各種別の概算との差額が当月の残り予算に反映されます（今日の残りは普通支出ベースのまま）。",
+    tooltip: "各種別の概算との差額がこのサイクル内の残り予算に反映されます（今日の残りは普通支出ベースのまま）。",
     helpAria: "光熱費が予算に与える影響の説明",
   },
 ];
@@ -71,19 +71,19 @@ const UTILITY_TYPE_OPTIONS: readonly {
   {
     value: "ELECTRICITY",
     label: "電気",
-    tooltip: "電気の実額として記録し、概算との差額を当月の残り予算に反映します。",
+    tooltip: "電気の実額として記録し、概算との差額をこのサイクル内の残り予算に反映します。",
     helpAria: "電気（光熱費）入力の説明",
   },
   {
     value: "GAS",
     label: "ガス",
-    tooltip: "ガスの実額として記録し、概算との差額を当月の残り予算に反映します。",
+    tooltip: "ガスの実額として記録し、概算との差額をこのサイクル内の残り予算に反映します。",
     helpAria: "ガス（光熱費）入力の説明",
   },
   {
     value: "WATER",
     label: "水道",
-    tooltip: "水道の実額として記録し、概算との差額を当月の残り予算に反映します。",
+    tooltip: "水道の実額として記録し、概算との差額をこのサイクル内の残り予算に反映します。",
     helpAria: "水道（光熱費）入力の説明",
   },
 ];
@@ -266,7 +266,7 @@ export function DashboardClient({
                 </li>
                 <li>
                   <strong className="font-medium text-nokori-text">光熱費</strong>
-                  ：各項目の概算との差額が当月の残り予算に加減されます（実額が概算より安いと予算が増え、高いと減ります）。
+                  ：各項目の概算との差額がこのサイクル内の残り予算に加減されます（実額が概算より安いと予算が増え、高いと減ります）。
                 </li>
               </ul>
             </details>

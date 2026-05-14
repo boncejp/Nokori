@@ -124,6 +124,7 @@ export default async function SettingsPage() {
           logicalTodayKey,
           isFirstCycle,
           initialBudgetDb: profile.initial_budget,
+          monthlyIncomeDb: profile.monthly_income,
           previewSnapshot,
         }}
       />

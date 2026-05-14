@@ -8,7 +8,6 @@ const VALID_PAYLOAD = {
   target_years: "1",
   target_months: "0",
   initial_total_assets: "200000",
-  monthly_income: "300000",
   payday: "24",
   payday_rule: "FIXED",
   fixed_costs: "80000",
@@ -25,7 +24,6 @@ describe("validateOnboardingPayload", () => {
       ...VALID_PAYLOAD,
       target_amount: "1,000,000",
       initial_total_assets: "200,000",
-      monthly_income: "300,000",
       fixed_costs: "80,000",
       estimated_electricity: "10,000",
       estimated_gas: "6,000",
@@ -92,6 +90,14 @@ describe("validateProfileSettingsPayload", () => {
     anchorLogicalDateKey: "2026-05-01",
     logicalToday: parseJstDateKeyToDate("2026-06-15"),
     existingInitialBudget: 120_000,
+    existingMonthlyIncome: 280_000,
+  };
+
+  const firstCycleContext = {
+    anchorLogicalDateKey: "2026-05-10",
+    logicalToday: parseJstDateKeyToDate("2026-05-14"),
+    existingInitialBudget: 50_000,
+    existingMonthlyIncome: 0,
   };
 
   it("オンボーディングと同形式のフィールドを検証する", () => {
@@ -143,5 +149,31 @@ describe("validateProfileSettingsPayload", () => {
       throw new Error("expected validation success");
     }
     expect(result.data.initial_budget).toBe(120_000);
+  });
+
+  it("初回サイクルで monthly_income を送らないときは既存の月収を採用する", () => {
+    const result = validateProfileSettingsPayload(
+      {
+        target_amount: "900000",
+        target_years: "1",
+        target_months: "0",
+        payday: "25",
+        payday_rule: "FIXED",
+        fixed_costs: "70000",
+        estimated_electricity: "8000",
+        estimated_gas: "5000",
+        estimated_water: "3000",
+        surplus_mode: "STRICT",
+        initial_budget: "45000",
+      },
+      firstCycleContext,
+    );
+
+    expect(result.success).toBe(true);
+    if (!result.success) {
+      throw new Error("expected validation success");
+    }
+    expect(result.data.monthly_income).toBe(0);
+    expect(result.data.initial_budget).toBe(45_000);
   });
 });

@@ -14,7 +14,6 @@ type OnboardingFormValues = {
   target_years: string;
   target_months: string;
   initial_total_assets: string;
-  monthly_income: string;
   payday: string;
   payday_rule: string;
   fixed_costs: string;
@@ -28,7 +27,6 @@ type OnboardingFormValues = {
 const MONEY_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
   "target_amount",
   "initial_total_assets",
-  "monthly_income",
   "fixed_costs",
   "estimated_electricity",
   "estimated_gas",
@@ -40,7 +38,6 @@ const STEP_FIELD_NAMES: readonly (keyof OnboardingFormValues)[] = [
   "target_amount",
   "target_years",
   "initial_total_assets",
-  "monthly_income",
   "payday",
   "payday_rule",
   "fixed_costs",
@@ -56,7 +53,6 @@ const INITIAL_FORM_VALUES: OnboardingFormValues = {
   target_years: "0",
   target_months: "1",
   initial_total_assets: "",
-  monthly_income: "",
   payday: "",
   payday_rule: PAYDAY_RULE_VALUES[0],
   fixed_costs: "",
@@ -83,7 +79,6 @@ export function OnboardingStepForm() {
       target_years: "達成期限",
       target_months: "達成期限（月）",
       initial_total_assets: "現在の全財産",
-      monthly_income: "月収（手取り概算）",
       payday: "給料日",
       payday_rule: "給料日の補正ルール",
       fixed_costs: "固定費合計",
@@ -275,12 +270,10 @@ function renderCurrentField(params: {
   const value = formValues[currentFieldName];
 
   const helperTextByField: Partial<Record<keyof OnboardingFormValues, string>> = {
-    target_amount: "例: 1,000,000（円）",
+    target_amount: "円単位の整数で入力してください。",
     initial_total_assets: "銀行口座・現金など、手元の全財産の合計（円）",
-    monthly_income: "例: 260,000（円）",
     payday: "毎月の給料日を1〜31で入力してください（例: 25）。",
     fixed_costs: "毎月必ず固定でかかり、金額の変動しない支出の合計額を入力してください。",
-    initial_budget: "次の給料日までに使う予定の金額（円）",
   };
   const helperText = helperTextByField[currentFieldName];
 
@@ -356,6 +349,7 @@ function renderCurrentField(params: {
 
   const isPaydayField = currentFieldName === "payday";
   const inputValue = isMoneyFieldName(currentFieldName) ? formatNumberWithCommas(value) : value;
+  const moneyPlaceholder = getMoneyFieldPlaceholder(currentFieldName);
   return (
     <div className="space-y-2">
       <input
@@ -364,7 +358,7 @@ function renderCurrentField(params: {
         inputMode="numeric"
         min={isPaydayField ? 1 : undefined}
         max={isPaydayField ? 31 : undefined}
-        placeholder={isMoneyFieldName(currentFieldName) ? "例: 1,000,000" : undefined}
+        placeholder={moneyPlaceholder}
         value={inputValue}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
         className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
@@ -372,6 +366,28 @@ function renderCurrentField(params: {
       {helperText ? <p className="text-sm text-nokori-muted">{helperText}</p> : null}
     </div>
   );
+}
+
+function getMoneyFieldPlaceholder(fieldName: keyof OnboardingFormValues): string | undefined {
+  if (!isMoneyFieldName(fieldName)) {
+    return undefined;
+  }
+  if (fieldName === "fixed_costs") {
+    return "例: 100,000";
+  }
+  if (fieldName === "estimated_electricity" || fieldName === "estimated_gas" || fieldName === "estimated_water") {
+    return "例: 5,000";
+  }
+  if (fieldName === "initial_budget") {
+    return "例: 100,000";
+  }
+  if (fieldName === "target_amount") {
+    return "例: 1,000,000";
+  }
+  if (fieldName === "initial_total_assets") {
+    return "例: 140,000";
+  }
+  return undefined;
 }
 
 function getErrorMessageFromResponseBody(body: unknown): string | null {

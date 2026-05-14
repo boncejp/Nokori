@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     target_duration_months: validationResult.data.target_duration_months,
     initial_total_assets: initialTotalAssets,
     current_total_savings: currentTotalSavingsFromOnboarding,
-    monthly_income: validationResult.data.monthly_income,
+    // オンボでは手取りを取らない。NOT NULL 列のため 0 を入れ、通常サイクル開始の給料日モーダルで実値を保存する。
+    monthly_income: 0,
     payday: validationResult.data.payday,
     payday_rule: validationResult.data.payday_rule,
     fixed_costs: validationResult.data.fixed_costs,

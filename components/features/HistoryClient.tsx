@@ -16,9 +16,25 @@ type HistoryClientProps = {
     readonly utilityEstimates: Readonly<Record<UtilityType, number>>;
     readonly transactions: readonly DashboardTransaction[];
   };
-  readonly monthlyTransactions: readonly DashboardTransaction[];
+  readonly cycleTransactions: readonly DashboardTransaction[];
+  /** サーバー算出のサイクル範囲・27:00 ルールの説明（実装の `getHistoryListingLogicalDateRange` と整合） */
+  readonly cycleListingDescription: string;
   readonly initialHistoryErrorMessage: string | null;
 };
+
+function formatLogicalDateJa(dateKey: string): string {
+  const parts = dateKey.split("-");
+  if (parts.length !== 3) {
+    return dateKey;
+  }
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return dateKey;
+  }
+  return `${y}年${m}月${d}日`;
+}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("ja-JP", {
@@ -54,14 +70,15 @@ function formatKindLabel(transaction: DashboardTransaction): string {
 
 export function HistoryClient({
   dashboardHydration,
-  monthlyTransactions,
+  cycleTransactions,
+  cycleListingDescription,
   initialHistoryErrorMessage,
 }: HistoryClientProps) {
   const hydrate = useDashboardStore((state) => state.hydrate);
   const logicalToday = useDashboardStore((state) => state.logicalToday);
   const deleteCommittedTransaction = useDashboardStore((state) => state.deleteCommittedTransaction);
 
-  const [transactions, setTransactions] = useState<readonly DashboardTransaction[]>(monthlyTransactions);
+  const [transactions, setTransactions] = useState<readonly DashboardTransaction[]>(cycleTransactions);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState("");
 
@@ -69,7 +86,11 @@ export function HistoryClient({
     hydrate(dashboardHydration);
   }, [dashboardHydration, hydrate]);
 
-  const monthlyTotal = useMemo(() => {
+  useEffect(() => {
+    setTransactions(cycleTransactions);
+  }, [cycleTransactions]);
+
+  const cycleExpenseTotal = useMemo(() => {
     return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
   }, [transactions]);
 
@@ -115,7 +136,8 @@ export function HistoryClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">履歴</h1>
-          <p className="text-sm text-nokori-muted">当月の支出（日付は深夜帯を翌日に繰り越すルールに基づきます）</p>
+          <p className="mt-1 text-sm font-medium text-nokori-text">このサイクル内の支出</p>
+          <p className="mt-2 text-sm leading-relaxed text-nokori-muted">{cycleListingDescription}</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Link
@@ -142,13 +164,13 @@ export function HistoryClient({
       {actionErrorMessage ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionErrorMessage}</p> : null}
 
       <div className="rounded-lg border border-nokori-border bg-nokori-subtle/60 p-4">
-        <p className="text-xs text-nokori-muted">当月支出合計</p>
-        <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(monthlyTotal)}</p>
+        <p className="text-xs text-nokori-muted">このサイクル内の支出の合計</p>
+        <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(cycleExpenseTotal)}</p>
       </div>
 
       {transactions.length === 0 ? (
         <div className="space-y-3 rounded-lg border border-dashed border-nokori-border px-4 py-8 text-center text-sm text-nokori-muted">
-          <p>当月の支出はまだありません。</p>
+          <p>このサイクル内の支出はまだありません。</p>
           <p>ダッシュボードから支出を登録すると、ここに表示されます。</p>
           <Link
             href="/dashboard"
@@ -165,7 +187,8 @@ export function HistoryClient({
                 <div className="space-y-1">
                   <p className="font-medium text-nokori-navy">{formatCurrency(transaction.amount)}</p>
                   <p className="text-sm text-nokori-text">{formatKindLabel(transaction)}</p>
-                  <p className="text-xs text-nokori-muted">{formatCreatedAt(transaction.created_at)}</p>
+                  <p className="text-xs text-nokori-muted">論理日: {formatLogicalDateJa(transaction.logical_date)}</p>
+                  <p className="text-xs text-nokori-muted">登録日時: {formatCreatedAt(transaction.created_at)}</p>
                   {transaction.memo ? <p className="text-sm text-nokori-muted">{transaction.memo}</p> : null}
                 </div>
                 <button

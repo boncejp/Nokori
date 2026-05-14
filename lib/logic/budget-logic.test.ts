@@ -14,6 +14,7 @@ import {
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
   calculateYutoriCarryoverDisplay,
+  getHistoryListingLogicalDateRange,
   getLogicalDate,
   isFirstCycleInitialBudgetExceedingTotalAssets,
   isWithinFirstCycle,
@@ -464,6 +465,34 @@ describe("calculateCycleWindow", () => {
 
     expect(formatJstDate(result.cycleStartDate)).toBe("2026-03-24");
     expect(formatJstDate(result.nextPaydayDate)).toBe("2026-04-24");
+  });
+});
+
+describe("getHistoryListingLogicalDateRange", () => {
+  it("初回サイクルではアンカー論理日から初回終了論理日までを返す", () => {
+    const anchor = parseJstDateKeyToDate("2026-04-10");
+    const result = getHistoryListingLogicalDateRange({
+      logicalToday: new Date("2026-04-15T09:00:00+09:00"),
+      anchorLogicalDate: anchor,
+      payday: 24,
+      paydayRule: "FIXED",
+      isFirstCycle: true,
+    });
+    expect(formatJstDate(result.from)).toBe("2026-04-10");
+    expect(formatJstDate(result.to)).toBe("2026-04-23");
+  });
+
+  it("通常サイクルではサイクル開始の給料日から次の給料日前日までを返す", () => {
+    const anchor = parseJstDateKeyToDate("2026-04-10");
+    const result = getHistoryListingLogicalDateRange({
+      logicalToday: new Date("2026-05-15T09:00:00+09:00"),
+      anchorLogicalDate: anchor,
+      payday: 25,
+      paydayRule: "FIXED",
+      isFirstCycle: false,
+    });
+    expect(formatJstDate(result.from)).toBe("2026-04-25");
+    expect(formatJstDate(result.to)).toBe("2026-05-24");
   });
 });
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
 import {
@@ -41,6 +41,8 @@ type PreviewContext = {
   readonly isFirstCycle: boolean;
   /** 保存済み `initial_budget`（通常サイクルのプレビュー母数に使用） */
   readonly initialBudgetDb: number;
+  /** 初回サイクルでは月収欄を出さないため、プレビューは DB の値を使う */
+  readonly monthlyIncomeDb: number;
   readonly previewSnapshot: SettingsPreviewSnapshot | null;
 };
 
@@ -54,6 +56,16 @@ type SettingsClientProps = {
 };
 
 const REQUIRED_RESET_TEXT = "RESET";
+
+const SETTINGS_MONEY_FIELD_NAMES: readonly (keyof SettingsFormValues)[] = [
+  "target_amount",
+  "monthly_income",
+  "fixed_costs",
+  "estimated_electricity",
+  "estimated_gas",
+  "estimated_water",
+  "initial_budget",
+];
 
 export function SettingsClient({
   initialValues,
@@ -128,6 +140,10 @@ export function SettingsClient({
   }, [formValues, previewContext]);
 
   const handleChangeValue = (fieldName: keyof SettingsFormValues, value: string) => {
+    if (SETTINGS_MONEY_FIELD_NAMES.includes(fieldName)) {
+      setFormValues((previousValues) => ({ ...previousValues, [fieldName]: toNumericOnly(value) }));
+      return;
+    }
     setFormValues((previousValues) => ({ ...previousValues, [fieldName]: value }));
   };
 
@@ -145,7 +161,7 @@ export function SettingsClient({
           target_amount: formValues.target_amount,
           target_years: formValues.target_years,
           target_months: formValues.target_months,
-          monthly_income: formValues.monthly_income,
+          ...(previewContext.isFirstCycle ? {} : { monthly_income: formValues.monthly_income }),
           payday: formValues.payday,
           payday_rule: formValues.payday_rule,
           fixed_costs: formValues.fixed_costs,
@@ -225,6 +241,9 @@ export function SettingsClient({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">設定</h1>
           <p className="text-sm text-nokori-muted">予算・給料日・光熱費の前提値を更新できます。</p>
+          <p className="mt-1 text-xs text-nokori-muted leading-relaxed">
+            日付の扱い: 「今日」や取引の集計に使う日付は論理日で、日本時間では毎日午前3:00が前日と当日の切り替えです（午前0:00〜2:59に登録した取引は前日扱い）。
+          </p>
         </div>
         <Link
           href="/dashboard"
@@ -241,6 +260,8 @@ export function SettingsClient({
             name="target_amount"
             value={formValues.target_amount}
             onChange={handleChangeValue}
+            thousands
+            placeholder="例: 1,000,000"
           />
           <DurationField
             label="達成期限"
@@ -259,12 +280,16 @@ export function SettingsClient({
               helperText="（目標金額 − 現在の貯金総額）÷ 目標日までの残り月数。編集はできません。"
             />
           ) : null}
-          <NumberField
-            label="月収"
-            name="monthly_income"
-            value={formValues.monthly_income}
-            onChange={handleChangeValue}
-          />
+          {previewContext.isFirstCycle ? null : (
+            <NumberField
+              label="月収（手取り概算）"
+              name="monthly_income"
+              value={formValues.monthly_income}
+              onChange={handleChangeValue}
+              thousands
+              placeholder="例: 300,000"
+            />
+          )}
           <NumberField label="給料日" name="payday" value={formValues.payday} onChange={handleChangeValue} min={1} max={31} />
           <SelectField
             label="給料日ルール"
@@ -283,15 +308,38 @@ export function SettingsClient({
             }))}
             onChange={handleChangeValue}
           />
-          <NumberField label="固定費合計" name="fixed_costs" value={formValues.fixed_costs} onChange={handleChangeValue} />
+          <NumberField
+            label="固定費合計"
+            name="fixed_costs"
+            value={formValues.fixed_costs}
+            onChange={handleChangeValue}
+            thousands
+            placeholder="例: 100,000"
+          />
           <NumberField
             label="電気代概算"
             name="estimated_electricity"
             value={formValues.estimated_electricity}
             onChange={handleChangeValue}
+            thousands
+            placeholder="例: 5,000"
           />
-          <NumberField label="ガス代概算" name="estimated_gas" value={formValues.estimated_gas} onChange={handleChangeValue} />
-          <NumberField label="水道代概算" name="estimated_water" value={formValues.estimated_water} onChange={handleChangeValue} />
+          <NumberField
+            label="ガス代概算"
+            name="estimated_gas"
+            value={formValues.estimated_gas}
+            onChange={handleChangeValue}
+            thousands
+            placeholder="例: 5,000"
+          />
+          <NumberField
+            label="水道代概算"
+            name="estimated_water"
+            value={formValues.estimated_water}
+            onChange={handleChangeValue}
+            thousands
+            placeholder="例: 5,000"
+          />
           <SelectField
             label="余剰金処理モード"
             name="surplus_mode"
@@ -317,6 +365,8 @@ export function SettingsClient({
               name="initial_budget"
               value={formValues.initial_budget}
               onChange={handleChangeValue}
+              thousands
+              placeholder="例: 100,000"
             />
           ) : null}
         </div>
@@ -431,16 +481,16 @@ function parseDraftFromForm(
   formValues: SettingsFormValues,
   previewContext: PreviewContext,
 ): SettingsBudgetPreviewDraft | null {
-  const targetAmount = Number(formValues.target_amount);
+  const targetAmount = Number(formValues.target_amount.replace(/,/g, ""));
   const years = Number(formValues.target_years);
   const months = Number(formValues.target_months);
-  const monthlyIncome = Number(formValues.monthly_income);
+  const monthlyIncome = previewContext.isFirstCycle ? previewContext.monthlyIncomeDb : Number(formValues.monthly_income);
   const payday = Number(formValues.payday);
-  const fixedCosts = Number(formValues.fixed_costs);
-  const estimatedElectricity = Number(formValues.estimated_electricity);
-  const estimatedGas = Number(formValues.estimated_gas);
-  const estimatedWater = Number(formValues.estimated_water);
-  const initialBudgetFromForm = Number(formValues.initial_budget);
+  const fixedCosts = Number(formValues.fixed_costs.replace(/,/g, ""));
+  const estimatedElectricity = Number(formValues.estimated_electricity.replace(/,/g, ""));
+  const estimatedGas = Number(formValues.estimated_gas.replace(/,/g, ""));
+  const estimatedWater = Number(formValues.estimated_water.replace(/,/g, ""));
+  const initialBudgetFromForm = Number(formValues.initial_budget.replace(/,/g, ""));
   const initialBudget = previewContext.isFirstCycle ? initialBudgetFromForm : previewContext.initialBudgetDb;
 
   const numericFields = [
@@ -494,20 +544,34 @@ type FieldProps = {
   readonly onChange: (name: keyof SettingsFormValues, value: string) => void;
 };
 
-function NumberField({ label, name, value, onChange, min = 0, max }: FieldProps & { min?: number; max?: number }) {
+function NumberField({
+  label,
+  name,
+  value,
+  onChange,
+  min = 0,
+  max,
+  thousands = false,
+  placeholder,
+}: FieldProps & { min?: number; max?: number; thousands?: boolean; placeholder?: string }) {
+  const fieldId = `settings-field-${name}`;
+  const displayValue = thousands ? formatDigitsWithCommas(value) : value;
   return (
-    <label className="flex flex-col gap-1 text-sm text-nokori-text">
-      <span>{label}</span>
+    <div className="flex flex-col gap-1 text-sm text-nokori-text">
+      <FormFieldLabelRow htmlFor={fieldId} label={label} />
       <input
-        type="number"
-        min={min}
-        max={max}
+        id={fieldId}
+        type={thousands ? "text" : "number"}
+        inputMode="numeric"
+        min={thousands ? undefined : min}
+        max={thousands ? undefined : max}
         required
-        value={value}
-        onChange={(event) => onChange(name, event.target.value)}
+        placeholder={placeholder}
+        value={displayValue}
+        onChange={(event) => onChange(name, thousands ? toNumericOnly(event.target.value) : event.target.value)}
         className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
       />
-    </label>
+    </div>
   );
 }
 
@@ -520,17 +584,20 @@ function ReadOnlyField({
   readonly value: string;
   readonly helperText?: string;
 }) {
+  const reactId = useId();
+  const fieldId = `${reactId}-readonly`;
   return (
-    <label className="flex flex-col gap-1 text-sm text-nokori-text">
-      <span>{label}</span>
+    <div className="flex flex-col gap-1 text-sm text-nokori-text">
+      <FormFieldLabelRow htmlFor={fieldId} label={label} />
       <input
+        id={fieldId}
         type="text"
         readOnly
         value={value}
         className="min-h-11 rounded-md border border-nokori-border bg-nokori-subtle px-3 py-2.5 text-base text-nokori-text sm:text-sm"
       />
       {helperText ? <p className="text-xs text-nokori-muted">{helperText}</p> : null}
-    </label>
+    </div>
   );
 }
 
@@ -544,8 +611,8 @@ function DurationField(props: {
 }) {
   const { label, yearsName, yearsValue, monthsName, monthsValue, onChange } = props;
   return (
-    <label className="flex flex-col gap-1 text-sm text-nokori-text">
-      <span>{label}</span>
+    <div className="flex flex-col gap-1 text-sm text-nokori-text">
+      <FormFieldLabelRow label={label} />
       <div className="grid grid-cols-2 gap-2">
         <select
           required
@@ -572,7 +639,7 @@ function DurationField(props: {
           ))}
         </select>
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -591,12 +658,13 @@ function SelectField(
 
   return (
     <div className="flex flex-col gap-1 text-sm text-nokori-text">
-      <div className="flex min-h-8 items-center justify-between gap-2">
-        <label htmlFor={fieldId} className="font-medium">
-          {label}
-        </label>
-        {showHelp ? <HelpTooltip ariaLabel={tooltipAria} description={descriptionText} /> : null}
-      </div>
+      <FormFieldLabelRow
+        htmlFor={fieldId}
+        label={label}
+        trailing={
+          showHelp ? <HelpTooltip ariaLabel={tooltipAria} description={descriptionText} /> : undefined
+        }
+      />
       <select
         id={fieldId}
         required
@@ -654,4 +722,33 @@ function formatCurrencyYen(value: number): string {
     currency: "JPY",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function FormFieldLabelRow(props: { readonly htmlFor?: string; readonly label: string; readonly trailing?: ReactNode }) {
+  const { htmlFor, label, trailing } = props;
+  const labelBody =
+    typeof htmlFor === "string" ? (
+      <label htmlFor={htmlFor} className="min-w-0 flex-1 pt-0.5 text-sm font-medium leading-snug text-nokori-text">
+        {label}
+      </label>
+    ) : (
+      <span className="min-w-0 flex-1 pt-0.5 text-sm font-medium leading-snug text-nokori-text">{label}</span>
+    );
+  return (
+    <div className="flex min-h-8 items-start justify-between gap-2">
+      {labelBody}
+      <span className="inline-flex w-8 shrink-0 justify-end">{trailing ?? <span className="h-8 w-8 shrink-0" aria-hidden />}</span>
+    </div>
+  );
+}
+
+function toNumericOnly(value: string): string {
+  return value.replace(/[^\d]/g, "");
+}
+
+function formatDigitsWithCommas(value: string): string {
+  if (value.length === 0) {
+    return "";
+  }
+  return String(Number(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }

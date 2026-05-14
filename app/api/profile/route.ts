@@ -43,6 +43,7 @@ export async function PATCH(request: Request) {
     anchorLogicalDateKey: profileResult.data.target_anchor_logical_date,
     logicalToday: logicalNow,
     existingInitialBudget: profileResult.data.initial_budget,
+    existingMonthlyIncome: profileResult.data.monthly_income,
   });
   if (!validationResult.success) {
     return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });

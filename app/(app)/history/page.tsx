@@ -2,11 +2,30 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { HistoryClient } from "@/components/features/HistoryClient";
-import { calculateDaysUntilNextPayday } from "@/lib/logic/budget-logic";
+import {
+  calculateDaysUntilNextPayday,
+  getHistoryListingLogicalDateRange,
+  parseJstDateKeyToDate,
+  toJstDateString,
+} from "@/lib/logic/budget-logic";
 import { resolveDashboardCycle } from "@/lib/supabase/dashboard-cycle-resolve";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { listTransactionsByLogicalDate, listTransactionsByLogicalMonth } from "@/lib/supabase/transactions";
+import { listTransactionsByLogicalDate, listTransactionsByLogicalDateRange } from "@/lib/supabase/transactions";
+
+function formatJapaneseLogicalDateLabel(dateKey: string): string {
+  const parts = dateKey.split("-");
+  if (parts.length !== 3) {
+    return dateKey;
+  }
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return dateKey;
+  }
+  return `${year}年${month}月${day}日`;
+}
 
 export default async function HistoryPage() {
   const supabase = await createSupabaseServerClient();
@@ -79,13 +98,29 @@ export default async function HistoryPage() {
   });
 
   const todayTransactionsResult = await listTransactionsByLogicalDate(supabase, logicalToday);
-  const monthTransactionsResult = await listTransactionsByLogicalMonth(supabase, logicalToday);
+  const historyLogicalRange = getHistoryListingLogicalDateRange({
+    logicalToday,
+    anchorLogicalDate: parseJstDateKeyToDate(profile.target_anchor_logical_date),
+    payday: profile.payday,
+    paydayRule: profile.payday_rule,
+    isFirstCycle: resolvedCycle.isFirstCycle,
+  });
+  const cycleTransactionsResult = await listTransactionsByLogicalDateRange(supabase, {
+    fromLogicalDate: historyLogicalRange.from,
+    toLogicalDate: historyLogicalRange.to,
+  });
 
   const dashboardTransactions = todayTransactionsResult.success ? todayTransactionsResult.data : [];
-  const monthlyTransactions = monthTransactionsResult.success ? monthTransactionsResult.data : [];
-  const initialHistoryErrorMessage = monthTransactionsResult.success
+  const cycleTransactions = cycleTransactionsResult.success ? cycleTransactionsResult.data : [];
+  const initialHistoryErrorMessage = cycleTransactionsResult.success
     ? null
-    : "当月の履歴を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
+    : "このサイクルの支出一覧を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
+
+  const rangeFromKey = toJstDateString(historyLogicalRange.from);
+  const rangeToKey = toJstDateString(historyLogicalRange.to);
+  const cycleListingDescription = resolvedCycle.isFirstCycle
+    ? `この一覧は、論理日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」から「${formatJapaneseLogicalDateLabel(rangeToKey)}」まで（初回サイクル）に計上された支出です。次の給料日を迎えると通常サイクルに切り替わり、集計の始まりは給料日（論理日）になります。表示する日付は論理日で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59に登録した支出は、まだ前日の内訳として集計されます）。`
+    : `この一覧は、今回のサイクル（論理日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」（給料日）から「${formatJapaneseLogicalDateLabel(rangeToKey)}」（次の給料日の前日）まで）の支出です。表示する日付は論理日で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59は前日扱い）。`;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 text-nokori-text">
@@ -106,7 +141,8 @@ export default async function HistoryPage() {
             isOptimistic: false,
           })),
         }}
-        monthlyTransactions={monthlyTransactions.map((transaction) => ({ ...transaction, isOptimistic: false }))}
+        cycleTransactions={cycleTransactions.map((transaction) => ({ ...transaction, isOptimistic: false }))}
+        cycleListingDescription={cycleListingDescription}
         initialHistoryErrorMessage={initialHistoryErrorMessage}
       />
     </main>
