@@ -512,8 +512,10 @@ test.beforeEach(async ({ page }) => {
 
 [Conventional Commits](https://www.conventionalcommits.org/) に準拠する。
 
+- **`type` および `scope`（付ける場合）は英語**（例: `feat`, `fix`, `chore(docs)`）。**`<subject>` と本文（body）は日本語で書くこと。** エージェントは英語の subject でコミットしない（過去コミット履歴の書き換えは不要）。
+
 ```
-<type>(<scope>): <subject>
+<type>(<scope>): <subject>   ← subject は日本語
 
 type:
   feat      新機能の追加
