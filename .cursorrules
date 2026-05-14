@@ -496,6 +496,7 @@ it('STRICTモードで余剰金が全額貯金に追加される', () => {
 
 ```typescript
 // ✅ セレクタは data-testid 属性を使う（CSSクラスやテキストに依存しない）
+// ダッシュボードの金額はテンキーUIが主体だが、E2E 用に同一 testid の input（画面外配置）へ fill すると従来どおり反映される
 await page.getByTestId('expense-amount-input').fill('1500');
 await page.getByTestId('submit-expense-button').click();
 

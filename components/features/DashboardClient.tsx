@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import type { UtilityType } from "@/lib/logic/budget-logic";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
-import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
+import { toNumericOnly } from "@/lib/money-input-format";
 
+import { ExpenseAmountKeypad } from "./ExpenseAmountKeypad";
 import { PaydaySalaryModal } from "./PaydaySalaryModal";
 
 type DashboardClientProps = {
@@ -207,19 +208,9 @@ export function DashboardClient({
         <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-nokori-border bg-nokori-subtle/50 p-4">
           <h2 className="text-base font-semibold text-nokori-navy">支出を登録</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex flex-col gap-1 text-sm text-nokori-text">
+            <label className="flex flex-col gap-1 text-sm text-nokori-text" htmlFor="expense-amount-input">
               <span>金額</span>
-              <input
-                data-testid="expense-amount-input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={formatDigitsWithCommas(amountInput)}
-                onChange={(event) => setAmountInput(toNumericOnly(event.target.value))}
-                className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
-                placeholder="例: 1,500"
-                required
-              />
+              <ExpenseAmountKeypad digits={amountInput} onDigitsChange={setAmountInput} />
             </label>
             <div className="flex flex-col gap-1 text-sm text-nokori-text sm:col-span-2">
               <span>支出種別</span>
