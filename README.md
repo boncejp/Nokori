@@ -1,6 +1,13 @@
 # Nokori
 
-Nokori の初期開発環境です。Next.js App Router + TypeScript をベースに、Supabase CLI のローカル開発を前提にしています。
+Nokori の初期開発環境です。Next.js App Router + TypeScript をベースに、**アプリのランタイム接続先はクラウド上の Supabase プロジェクトを主**とします（Google OAuth 等の検証の都合）。スキーマはリポジトリの `supabase/migrations` で管理し、**Supabase CLI** でクラウドへ反映したり型を生成したりします。CLI は「ローカル DB を必ず起動する」ためのものではありません。
+
+本番ホスティングは **Vercel を第一選択**と想定しています（デプロイ・OAuth の詳細は `docs/design.md`）。
+
+## 前提ツール
+
+- [Node.js](https://nodejs.org/)（プロジェクトの推奨版に合わせる）
+- [Supabase CLI](https://supabase.com/docs/guides/cli)（マイグレーション適用・型生成・任意でローカル DB）
 
 ## セットアップ
 
@@ -10,48 +17,71 @@ Nokori の初期開発環境です。Next.js App Router + TypeScript をベー�
 npm install
 ```
 
-2. 環境変数を作成します。
+2. [Supabase](https://supabase.com/) で**クラウド上にプロジェクト**を作成します。
+
+3. 環境変数ファイルを用意します。
 
 ```bash
 copy .env.example .env
 ```
 
-3. Supabase CLI でローカル環境を初期化します。
+4. Supabase ダッシュボードで **Project Settings → API** を開き、次を `.env` に設定します。
+
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon public** キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - サーバー専用で必要な場合のみ **service_role** キー（「Reveal」を押して表示）→ `SUPABASE_SERVICE_ROLE_KEY`  
+     （通常のユーザー CRUD では使わない方針。用途は `docs/design.md` を参照。）
+
+5. **Google OAuth** を使う場合は、Supabase 側で Google プロバイダを有効化し、**Authentication → URL Configuration** で Site URL / Redirect URLs、および Google Cloud Console の OAuth クライアント設定を整えます。具体例とハマりどころは `docs/design.md` の「認証・OAuth 運用メモ」を参照してください。
+
+6. リポジトリに `supabase/` が含まれていることを確認し、未初期化の場合のみ次を実行します。
 
 ```bash
 supabase init
-supabase start
 ```
 
-4. Supabase のローカル URL / anon key / service role key を確認し、`.env` に設定します。
+7. CLI からクラウドプロジェクトに接続します（初回・プロジェクト変更時）。
 
 ```bash
-supabase status
+supabase login
+supabase link
 ```
 
-5. マイグレーションを適用します（初回およびスキーマ変更後）。
+   `supabase link` はダッシュボードの **Project Settings → General → Reference ID** を聞かれたら入力します。
+
+8. `supabase/migrations` の SQL を**クラウド DB**に反映します（初回およびマイグレーション追加後）。
 
 ```bash
-supabase db reset
+supabase db push
 ```
 
-※ データを残したまま進める場合は `supabase migration up` を使います。
+   チームで「マイグレーションは CI や別経路のみ」など CLI を使わない運用にする場合は、その手順に従ってください。**SQL Editor にマイグレーション内容を手で貼る運用は、取り違えやすく非推奨**です（どうしても行う場合はファイルと差分を必ず照合する）。
 
-6. TypeScript 型を生成します（スキーマ変更のたびに再実行）。
+9. TypeScript 型を生成します（スキーマ変更のたびに再実行。`supabase link` 済みであること）。
 
 ```bash
 npm run gen:types
 ```
 
-生成先は `lib/types/database.ts` です。
+生成先は `lib/types/database.ts` です。リンクしていない場合やローカル DB のスキーマだけから型を出したい場合は、公式ドキュメントに従い `supabase gen types typescript --local` などを直接実行してください（その場合は `supabase start` が必要）。
 
-7. アプリを起動します。
+10. アプリを起動します。
 
 ```bash
 npm run dev
 ```
 
 ブラウザで `http://localhost:3000` を開いて動作確認してください。
+
+## ローカル Supabase を使う場合（任意）
+
+OAuth を除く検証など、**Docker でローカル Postgres を立てる**場合のみ `supabase start` を使います。API の URL とキーは次で確認できます。
+
+```bash
+supabase status
+```
+
+マイグレーションの適用は `supabase db reset`（ローカル DB をリセットしてマイグレーションから再構築）が便利です。`.env` の URL / キーをローカル用に差し替えてください。
 
 ## Docker 起動（アプリのみ）
 

@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outPath = path.join(__dirname, "..", "lib", "types", "database.ts");
 
+// クラウドに `supabase link` したプロジェクトのスキーマを参照（`supabase start` 不要）
 const stdout = execFileSync(
   "supabase",
-  ["gen", "types", "typescript", "--local", "--schema", "public"],
+  ["gen", "types", "typescript", "--linked", "--schema", "public"],
   { maxBuffer: 50 * 1024 * 1024 },
 );
 

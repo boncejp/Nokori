@@ -4,20 +4,20 @@
 
 | 領域 | 採用技術 |
 |---|---|
-| Frontend / Backend | Next.js 14+ (App Router), TypeScript |
+| Frontend / Backend | Next.js 16+ (App Router), TypeScript |
 | State Management | Zustand |
 | Database | Supabase (PostgreSQL) |
 | DB Client | `@supabase/ssr`（Next.js App Router対応） |
-| Schema / Migration | Supabase CLI（SQLマイグレーションファイルで管理） |
+| Schema / Migration | Supabase CLI（`supabase/migrations` の SQL を管理。ランタイムの DB がローカルとは限らない） |
 | 型生成 | `supabase gen types typescript` |
-| Infrastructure | Docker, GCP (Cloud Run) |
-| CI/CD | GitHub Actions |
+| Infrastructure | Vercel（Next.js の本番ホスティング）、Docker（ローカル開発および将来のコンテナビルド検証用）。GCP（Cloud Run 等）は工数を抑えた先行リリース後の**移行候補**（§3.4）。 |
+| CI/CD | **現状の本番:** Vercel の Git 連携によるビルド・デプロイ（必要に応じ PR 用プレビュー環境）。**補助:** GitHub Actions で PR 時の Lint / 型チェック / テスト等を回す構成を想定しているが、リポジトリへのワークフロー配置は未着手（§3.5）。 |
 | Unit Test | Vitest |
-| E2E / Integration Test | Playwright |
+| E2E / Integration Test | Playwright（**未導入・今後実装**。§6.2 は実装後の想定） |
 | Date & Time | `date-fns` + `date-fns-tz`（常に `Asia/Tokyo` 基準） |
 | Holiday Calculation | `@holiday-jp/holiday_jp` |
 
-> **Prismaは使用しない。** Supabase CLIのSQLマイグレーションと `supabase gen types typescript` による型生成で代替する。これによりRLSがランタイムのDB操作を確実に通過する。
+> **Prismaは使用しない。** Supabase CLI で `supabase/migrations` を管理し、`supabase gen types typescript`（リンク済みプロジェクト向けは `--linked`）で型生成する。開発・検証の**接続先 DB はクラウド上の Supabase が主**であり、CLI はローカル DB（`supabase start`）を必須にはしない。これにより RLS がランタイムの DB 操作を確実に通過する。
 
 ---
 
@@ -113,23 +113,51 @@ CREATE POLICY "own_transactions_only"
 
 - **Dockerfile:** Multi-stage buildを採用し、本番用イメージを軽量化。
 - **docker-compose.yml:** `app`（Next.js開発サーバー）のみを管理。
-- Supabaseローカル開発環境は **Supabase CLI**（`supabase start`）で管理し、docker-composeとは分離する。
+- **ランタイムの接続先:** 開発・検証では **クラウド上の Supabase プロジェクト**を主とする（Google OAuth の都合など）。**Supabase CLI** は `supabase link` / `supabase db push`、型生成、**任意**のローカル DB（`supabase start`）など**ツールチェーン**として使い、docker-compose の Next コンテナとは役割が異なる。
 
-### 3.2 GCP デプロイ構成
+MVP の本番は **Vercel を第一選択**とし、必ずしもこの Docker イメージを **Cloud Run で稼働させる前提ではない**（先行リリースと運用工数の削減を優先）。コンテナはローカルや将来の GCP 移行検討時の再現性確保に使う。
+
+### 3.2 認証・OAuth 運用メモ
+
+- **プロバイダ:** Supabase Auth で **Google** を有効化する前提（ダッシュボード **Authentication → Providers**）。
+- **Supabase 側 URL:** **Authentication → URL Configuration** で **Site URL**（本番アプリのオリジン）と **Redirect URLs**（ログイン後に許可するオリジン一覧）を登録する。ここに無いオリジンからの OAuth は失敗する。
+- **登録例（Redirect URLs に含める想定のパターン）**
+  - ローカル: `http://localhost:3000/**` や、アプリ実装に合わせたコールバックパス（例: `http://localhost:3000/auth/callback` など。実際のルートに合わせる）。
+  - Vercel 本番: `https://<production-domain>/**` および必要ならコールバックパス単位の URL。
+  - Vercel **Preview**: プレビュー URL はブランチごとに変わる。Supabase が **ワイルドカードを許容しない**場合は、プレビューごとに Redirect URL を追加するか、検証用に固定のプレビュー環境を用意するなど、**Supabase の制約に従った運用**とする（詳細は Supabase 公式ドキュメントの Authentication / Redirect URLs を参照）。
+- **Google Cloud Console（OAuth クライアント）:** **承認済みのリダイレクト URI** に、Supabase が案内する **OAuth コールバック URL**（`https://<project-ref>.supabase.co/auth/v1/callback` 形式）を含める。ここをアプリの `localhost` のみにしてしまうと、Google → Supabase のコールバックで失敗する。**アプリのオリジン**は主に Supabase の Site URL / Redirect URLs 側で許可し、Google 側は **Supabase のコールバック**を受け皿にする、という対応関係を誤らないこと。
+
+上記はいずれも **RLS 前提の anon キー利用**や「**service_role は通常 CRUD に使わない**」という既存方針と矛盾しない（OAuth は Auth のフロー設定の話である）。
+
+### 3.3 Vercel 本番デプロイ（MVP）
+
+- **ホスティング:** Vercel 上で Next.js アプリをビルド・配信する。ホスト型 Supabase（PostgreSQL / Auth）へは、クライアント・サーバー双方から既存どおり HTTPS 経由で接続する。
+- **環境変数:** 本番・プレビューごとに Vercel の Project Settings で設定する。例: `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、サーバー専用用途に限る `SUPABASE_SERVICE_ROLE_KEY`（設計方針どおり通常 CRUD には使わない）。
+- **ブランチ戦略（例）:** `main` を Production に紐づけ、PR はプレビューデプロイで検証する（運用に合わせて調整可）。
+- **ビルド:** リポジトリの `package.json` に従い、`npm run build`（`next build`）をビルドコマンドとする想定。
+- **OAuth:** 本番・プレビューごとに §3.2 の Redirect URLs を Supabase 側で維持する。Vercel の Environment に設定するのは主に Supabase の URL / キーであり、Google の Client Secret は Supabase プロバイダ設定に任せる構成を想定する（実装に合わせて調整）。
+
+### 3.4 GCP への移行（検討・Backlog）
+
+工数とリリース速度を優先し、**いつ実施するかは未決定**とする。以下は将来、トラフィック・コスト・コンプライアンス等の理由で Vercel から移す場合の**候補構成メモ**であり、MVP の前提ではない。
 
 - **Platform:** Google Cloud Run
 - **Container Registry:** Artifact Registry
-- **Secret Management:** Secret Manager（SupabaseのAPIキー、DB接続URLの管理）
-- **Networking:** Cloud Runからホスト型Supabaseインスタンスへ接続。
+- **Secret Management:** Secret Manager（Supabase の API キー、接続情報の管理）
+- **Networking:** Cloud Run からホスト型 Supabase インスタンスへ接続。
 
-### 3.3 CI/CD パイプライン（GitHub Actions）
+### 3.5 CI/CD パイプライン
+
+**本番デプロイ**は Vercel の Git 連携に任せ、main（または既定の本番ブランチ）へのマージで Production ビルドが走る想定とする。
+
+**GitHub Actions**（現リポジトリにはワークフローファイルはまだない）は、PR 品質のための補助線として次を**導入予定**とする。Deploy ジョブで Cloud Run に載せ替える前提は置かない。
 
 | ジョブ | トリガー | 内容 |
 |---|---|---|
-| Lint & Type Check | PR作成時 | ESLint + tsc |
+| Lint & Type Check | PR作成時 | ESLint + `tsc`（プロジェクト方針に合わせて整備） |
 | Unit Test（Vitest） | PR作成時 | コアロジックの単体テスト |
-| E2E Test（Playwright） | PR作成時 | JSTタイムゾーン指定環境で実行 |
-| Deploy | mainブランチマージ時 | Dockerイメージビルド → Cloud Run自動デプロイ |
+| E2E Test（Playwright） | PR作成時 | JSTタイムゾーン指定環境で実行（Playwright 導入後。未導入時は省略可） |
+| Deploy（本番） | main マージ時 | **Vercel が自動実行**（Git 連携。Docker イメージ → Cloud Run ではない） |
 
 ---
 
@@ -338,6 +366,8 @@ function processMonthlyReset(
 
 ### 6.2 E2E Test（Playwright）
 
+**Playwright は現リポジトリに未導入。** 以下は実装後の E2E 方針とする。
+
 | シナリオ | 確認内容 |
 |---|---|
 | 1 | 支出入力後、残り予算・翌日以降予算のリアルタイム更新 |
@@ -360,4 +390,4 @@ function processMonthlyReset(
 | 4. UI – Onboarding | 現在の全財産・次の給料日まで使う予算を含む全オンボーディング画面、`initial_total_assets` の保存 |
 | 5. UI – Dashboard | テンキー入力・トグル（フェーズにより切替）・リアルタイム表示・翌日予算プレビュー・初回説明 |
 | 6. UI – History / Settings | スワイプ削除・リアクティブな予算復元。設定は通常サイクル時のみ月次貯金ノルマ表示（読み取り専用）を含む |
-| 7. Integration | CI/CD（GitHub Actions）の構築とCloud Runへの疎通 |
+| 7. Integration | Vercel への本番接続（環境変数・Supabase 疎通・本番ブランチでのビルド確認）。GitHub Actions は PR の Lint / テスト等を必要に応じ追加。GCP（Cloud Run）への移行は別フェーズで検討 |
