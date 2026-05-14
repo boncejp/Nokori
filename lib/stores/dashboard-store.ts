@@ -303,7 +303,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
 
       if (typeof body !== "object" || body === null || !("transaction" in body)) {
         const invalidResponseMessage =
-          "サーバー応答の形式が不正です。データを保護するため入力を取り消しました。";
+          "保存を完了できませんでした。通信状況を確認し、もう一度お試しください。";
         rollbackToPreviousState(set, previousState, invalidResponseMessage);
         return { success: false, errorMessage: invalidResponseMessage };
       }
@@ -311,7 +311,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
       const rawTransaction = body.transaction;
       if (!isDashboardTransaction(rawTransaction)) {
         const invalidTransactionMessage =
-          "保存結果の形式が不正です。データを保護するため入力を取り消しました。";
+          "保存を完了できませんでした。通信状況を確認し、もう一度お試しください。";
         rollbackToPreviousState(set, previousState, invalidTransactionMessage);
         return { success: false, errorMessage: invalidTransactionMessage };
       }

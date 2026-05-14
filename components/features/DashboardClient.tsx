@@ -110,20 +110,20 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
 
   return (
     <section
-      className={`relative space-y-6 rounded-xl border p-6 ${
+      className={`relative space-y-6 rounded-xl border p-4 sm:p-6 ${
         isOverBudget ? "border-red-300 bg-red-50 text-red-950" : "border-zinc-200 bg-white"
       }`}
     >
       {salaryPrompt !== null ? <PaydaySalaryModal salaryPrompt={salaryPrompt} /> : null}
       <div className="space-y-2">
         <p className="text-sm text-zinc-500">今日の残り予算</p>
-        <p className="text-4xl font-bold tracking-tight">{formatCurrency(remainingToday)}</p>
+        <p className="text-3xl font-bold tracking-tight sm:text-4xl">{formatCurrency(remainingToday)}</p>
         {isOverBudget ? (
           <p className="text-sm font-medium text-red-700">予算超過です。支出ペースを見直してください。</p>
         ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-3">
         <MetricCard label="当日の目安予算" value={formatCurrency(dailyBudgetToday)} />
         <MetricCard label="翌日以降の目安（1日あたり）" value={formatCurrency(futureDailyBudget)} />
         <MetricCard label="今日の支出合計" value={formatCurrency(todaySpentTotal)} />
@@ -143,9 +143,10 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
       ) : null}
 
       {initialState.initialTransactionsErrorMessage ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {initialState.initialTransactionsErrorMessage}
-        </p>
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p>{initialState.initialTransactionsErrorMessage}</p>
+          <p className="text-xs text-amber-900/90">一覧を取り直すには、ブラウザでページを再読み込みしてください。</p>
+        </div>
       ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-zinc-200 p-4">
@@ -159,7 +160,7 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
               min={1}
               value={amountInput}
               onChange={(event) => setAmountInput(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2"
+              className="rounded-md border border-zinc-300 px-3 py-2.5 min-h-11 text-base sm:text-sm"
               placeholder="1500"
               required
             />
@@ -171,13 +172,13 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
                 type="text"
                 readOnly
                 value="普通支出"
-                className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-700"
+                className="min-h-11 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-base text-zinc-700 sm:text-sm"
               />
             ) : (
               <select
                 value={kindInput}
                 onChange={(event) => setKindInput(parseKind(event.target.value))}
-                className="rounded-md border border-zinc-300 px-3 py-2"
+                className="rounded-md border border-zinc-300 px-3 py-2.5 min-h-11 text-base sm:text-sm"
                 title="支出のカテゴリ（予算・貯金への効き方が異なります）"
               >
                 {TRANSACTION_KIND_OPTIONS.map((option) => (
@@ -194,7 +195,7 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
               <select
                 value={utilityTypeInput}
                 onChange={(event) => setUtilityTypeInput(parseUtilityType(event.target.value))}
-                className="rounded-md border border-zinc-300 px-3 py-2"
+                className="rounded-md border border-zinc-300 px-3 py-2.5 min-h-11 text-base sm:text-sm"
               >
                 {UTILITY_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -210,7 +211,7 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
               type="text"
               value={memoInput}
               onChange={(event) => setMemoInput(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2"
+              className="rounded-md border border-zinc-300 px-3 py-2.5 min-h-11 text-base sm:text-sm"
               placeholder="ランチ"
               maxLength={200}
             />
@@ -218,15 +219,17 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
         </div>
         {isFirstCycle ? null : (
           <details className="rounded-md border border-zinc-200 bg-zinc-50/80 px-3 py-2 text-sm text-zinc-700">
-            <summary className="cursor-pointer select-none font-medium text-zinc-800">支出の種別が予算に与える影響</summary>
+            <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-zinc-800">
+              支出の種別が予算に与える影響
+            </summary>
             <ul className="mt-2 list-inside list-disc space-y-1.5 text-zinc-600">
               <li>
                 <strong className="font-medium text-zinc-800">普通支出</strong>
-                ：当日の可処分予算と翌日以降の日次予算から差し引かれます。
+                ：「今日の残り」に相当する枠と、翌日以降の1日あたりの目安から差し引かれます。
               </li>
               <li>
                 <strong className="font-medium text-zinc-800">特別支出</strong>
-                ：貯金総額から直接差し引かれ、当日の日次予算には影響しません（貯金ノルマは再計算されます）。
+                ：貯金総額から直接差し引かれ、当日の日次予算には影響しません（月次貯金ノルマは再計算されます）。
               </li>
               <li>
                 <strong className="font-medium text-zinc-800">光熱費</strong>
@@ -241,7 +244,7 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
           data-testid="submit-expense-button"
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+          className="min-h-11 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60 sm:w-auto"
         >
           {isSubmitting ? "保存中..." : "登録"}
         </button>
@@ -250,7 +253,9 @@ export function DashboardClient({ salaryPrompt, initialState }: DashboardClientP
       <div className="space-y-2">
         <h2 className="text-base font-semibold">当日の支出（簡易）</h2>
         {transactions.length === 0 ? (
-          <p className="text-sm text-zinc-600">まだ支出はありません。</p>
+          <p className="text-sm text-zinc-600">
+            まだ支出はありません。上のフォームから金額を入力して登録してください。
+          </p>
         ) : (
           <ul className="space-y-2 text-sm">
             {transactions.map((transaction) => (

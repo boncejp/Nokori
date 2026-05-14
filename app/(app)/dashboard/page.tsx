@@ -70,7 +70,7 @@ export default async function DashboardPage() {
   const transactions = transactionsResult.success ? transactionsResult.data : [];
   const initialTransactionsErrorMessage = transactionsResult.success
     ? null
-    : "当日の支出データ取得に失敗しました。表示内容が最新ではない可能性があります。";
+    : "当日の支出一覧を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
 
   const paydayPromptCycleWindow = calculateCycleWindow({
     referenceDate: logicalToday,
@@ -88,8 +88,8 @@ export default async function DashboardPage() {
       : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+      <h1 className="text-2xl font-semibold">ダッシュボード</h1>
       <DashboardClient
         salaryPrompt={salaryPrompt}
         initialState={{
@@ -119,8 +119,8 @@ type DashboardErrorLayoutProps = {
 
 function DashboardErrorLayout({ errorMessage, children }: DashboardErrorLayoutProps) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+      <h1 className="text-2xl font-semibold">ダッシュボード</h1>
       <section
         role="alert"
         data-testid="dashboard-cycle-error"
@@ -142,20 +142,20 @@ function DashboardNavigationLinks() {
     <>
       <Link
         href="/history"
-        className="inline-flex w-fit rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
+        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
       >
         履歴を見る
       </Link>
       <Link
         href="/settings"
-        className="inline-flex w-fit rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
+        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
       >
         設定を開く
       </Link>
       <form action={logoutAction}>
         <button
           type="submit"
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-100"
+          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
         >
           ログアウト
         </button>

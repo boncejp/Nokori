@@ -103,7 +103,7 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
             placeholder="you@example.com"
             autoComplete="email"
             required
@@ -113,9 +113,9 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
         <button
           type="submit"
           disabled={isBusy}
-          className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-60"
+          className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
         >
-          {isEmailSubmitting ? "送信中..." : "Emailでログイン"}
+          {isEmailSubmitting ? "送信中..." : "メールでログイン"}
         </button>
         <button
           type="button"
@@ -123,7 +123,7 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
           onClick={() => {
             void handleGoogleLogin();
           }}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-slate-900 disabled:opacity-60"
+          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm font-medium text-slate-900 disabled:opacity-60"
         >
           {isGoogleSubmitting ? "リダイレクト中..." : "Googleでログイン"}
         </button>

@@ -19,18 +19,13 @@ npm install
 
 2. [Supabase](https://supabase.com/) で**クラウド上にプロジェクト**を作成します。
 
-3. 環境変数ファイルを用意します。
+3. 環境変数ファイルを用意します（変数名はリポジトリの `.env.example` と一致させます）。
 
 ```bash
 copy .env.example .env
 ```
 
-4. Supabase ダッシュボードで **Project Settings → API** を開き、次を `.env` に設定します。
-
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public** キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - サーバー専用で必要な場合のみ **service_role** キー（「Reveal」を押して表示）→ `SUPABASE_SERVICE_ROLE_KEY`  
-     （通常のユーザー CRUD では使わない方針。用途は `docs/design.md` を参照。）
+4. 各変数の**意味と取得元**は `docs/design.md` の **§3.3.1（環境変数一覧）** に従って `.env` に設定します。本番・プレビューでは Vercel の **Project Settings → Environment Variables** に同じ名前で登録します。**GitHub の Issue・PR・コミットに実キーや本番 URL を書かないでください。**
 
 5. **Google OAuth** を使う場合は、Supabase 側で Google プロバイダを有効化し、**Authentication → URL Configuration** で Site URL / Redirect URLs、および Google Cloud Console の OAuth クライアント設定を整えます。具体例とハマりどころは `docs/design.md` の「認証・OAuth 運用メモ」を参照してください。
 

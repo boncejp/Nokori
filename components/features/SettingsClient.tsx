@@ -159,7 +159,7 @@ export function SettingsClient({
       const apiErrorMessage = getErrorMessageFromResponseBody(body);
 
       if (!response.ok || apiErrorMessage) {
-        setFormErrorMessage(apiErrorMessage ?? "設定の保存に失敗しました。");
+        setFormErrorMessage(apiErrorMessage ?? "設定を保存できませんでした。通信状況を確認し、もう一度お試しください。");
         return;
       }
 
@@ -203,7 +203,7 @@ export function SettingsClient({
       const body: unknown = await response.json();
       const apiErrorMessage = getErrorMessageFromResponseBody(body);
       if (!response.ok || apiErrorMessage) {
-        setResetErrorMessage(apiErrorMessage ?? "データ初期化に失敗しました。");
+        setResetErrorMessage(apiErrorMessage ?? "データを初期化できませんでした。通信状況を確認し、もう一度お試しください。");
         return;
       }
 
@@ -219,14 +219,17 @@ export function SettingsClient({
   const targetDateShown = computedTargetDateKey ?? formValues.target_date_display;
 
   return (
-    <section className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6">
-      <div className="flex items-center justify-between gap-3">
+    <section className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
+          <h1 className="text-2xl font-semibold">設定</h1>
           <p className="text-sm text-zinc-600">予算・給料日・光熱費の前提値を更新できます。</p>
         </div>
-        <Link href="/dashboard" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-          Dashboardへ戻る
+        <Link
+          href="/dashboard"
+          className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100 sm:w-auto"
+        >
+          ダッシュボードへ戻る
         </Link>
       </div>
 
@@ -268,11 +271,16 @@ export function SettingsClient({
             value={formValues.payday_rule}
             options={PAYDAY_RULE_VALUES.map((value) => ({
               value,
-              label: `${value}${value === "FIXED" ? "（補正なし）" : value === "BEFORE" ? "（前倒し）" : "（後ろ倒し）"}`,
+              label:
+                value === "FIXED"
+                  ? "固定（土日祝も給料日のまま）"
+                  : value === "BEFORE"
+                    ? "前倒し（土日祝は前の平日へ）"
+                    : "後ろ倒し（土日祝は次の平日へ）",
             }))}
             onChange={handleChangeValue}
           />
-          <NumberField label="固定費" name="fixed_costs" value={formValues.fixed_costs} onChange={handleChangeValue} />
+          <NumberField label="固定費合計" name="fixed_costs" value={formValues.fixed_costs} onChange={handleChangeValue} />
           <NumberField
             label="電気代概算"
             name="estimated_electricity"
@@ -282,7 +290,7 @@ export function SettingsClient({
           <NumberField label="ガス代概算" name="estimated_gas" value={formValues.estimated_gas} onChange={handleChangeValue} />
           <NumberField label="水道代概算" name="estimated_water" value={formValues.estimated_water} onChange={handleChangeValue} />
           <SelectField
-            label="余剰金モード"
+            label="余剰金処理モード"
             name="surplus_mode"
             value={formValues.surplus_mode}
             options={SURPLUS_MODE_VALUES.map((value) => ({
@@ -319,7 +327,7 @@ export function SettingsClient({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+          className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
         >
           {isSubmitting ? "保存中..." : "設定を保存"}
         </button>
@@ -334,7 +342,7 @@ export function SettingsClient({
           type="text"
           value={resetConfirmText}
           onChange={(event) => setResetConfirmText(event.target.value)}
-          className="w-full rounded-md border border-red-300 px-3 py-2 text-sm"
+          className="min-h-11 w-full rounded-md border border-red-300 px-3 py-2.5 text-base sm:text-sm"
           placeholder={REQUIRED_RESET_TEXT}
         />
         {resetErrorMessage ? <p className="text-sm text-red-700">{resetErrorMessage}</p> : null}
@@ -342,7 +350,7 @@ export function SettingsClient({
           type="button"
           onClick={handleResetData}
           disabled={isResetting}
-          className="rounded-md border border-red-400 bg-white px-4 py-2 text-sm text-red-800 disabled:opacity-60"
+          className="min-h-11 rounded-md border border-red-400 bg-white px-4 py-2.5 text-sm font-medium text-red-800 disabled:opacity-60"
         >
           {isResetting ? "初期化中..." : "データを初期化する"}
         </button>
@@ -369,15 +377,15 @@ function SettingsPreviewSection(props: {
       ) : (
         <p className="mt-2 text-sm text-indigo-900">
           <strong>通常サイクル:</strong>{" "}
-          収入・固定費・光熱費概算・達成条件の草案がプレビューに反映されます。日次の母数は STRICT では基準サイクル予算、YUTORI
-          では給料日リセットで確定した保存済みサイクル枠（繰り越し込み）です。貯金総額と今日までの確定支出・当日トランザクションは実データ固定です。
+          収入・固定費合計・光熱費概算・達成条件の変更案がプレビューに反映されます。日次の母数は、余剰金処理が厳格のときは基準サイクル予算、ゆとりのときは給料日リセットで確定したサイクル枠（繰り越し込み）です。貯金総額と今日までの確定支出・当日の支出は実データのままです。
         </p>
       )}
 
       {previewSnapshot === null ? (
-        <p className="mt-3 text-sm text-amber-900">
-          プレビュー用データを読み込めませんでした（サイクル解決または取得エラー）。設定の編集・保存は可能です。
-        </p>
+        <div className="mt-3 space-y-2 text-sm text-amber-900">
+          <p>プレビュー用データを読み込めませんでした。設定の編集・保存はそのまま試せます。</p>
+          <p className="text-xs text-amber-950/80">改善しない場合は、ページを再読み込みするか、時間をおいてから再度お試しください。</p>
+        </div>
       ) : previewMetrics === null ? (
         <p className="mt-3 text-sm text-zinc-700">入力内容を確認するとプレビューを表示します。</p>
       ) : previewMetrics.status === "unavailable" ? (
@@ -492,7 +500,7 @@ function NumberField({ label, name, value, onChange, min = 0, max }: FieldProps 
         required
         value={value}
         onChange={(event) => onChange(name, event.target.value)}
-        className="rounded-md border border-zinc-300 px-3 py-2"
+        className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
       />
     </label>
   );
@@ -514,7 +522,7 @@ function ReadOnlyField({
         type="text"
         readOnly
         value={value}
-        className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-zinc-800"
+        className="min-h-11 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-base text-zinc-800 sm:text-sm"
       />
       {helperText ? <p className="text-xs text-zinc-500">{helperText}</p> : null}
     </label>
@@ -538,7 +546,7 @@ function DurationField(props: {
           required
           value={yearsValue}
           onChange={(event) => onChange(yearsName, event.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2"
+          className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
         >
           {Array.from({ length: 21 }, (_, year) => (
             <option key={year} value={String(year)}>
@@ -550,7 +558,7 @@ function DurationField(props: {
           required
           value={monthsValue}
           onChange={(event) => onChange(monthsName, event.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2"
+          className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
         >
           {Array.from({ length: 12 }, (_, month) => (
             <option key={month} value={String(month)}>
@@ -576,7 +584,7 @@ function SelectField(
         required
         value={value}
         onChange={(event) => onChange(name, event.target.value)}
-        className="rounded-md border border-zinc-300 px-3 py-2"
+        className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

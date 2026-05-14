@@ -132,10 +132,22 @@ MVP の本番は **Vercel を第一選択**とし、必ずしもこの Docker �
 ### 3.3 Vercel 本番デプロイ（MVP）
 
 - **ホスティング:** Vercel 上で Next.js アプリをビルド・配信する。ホスト型 Supabase（PostgreSQL / Auth）へは、クライアント・サーバー双方から既存どおり HTTPS 経由で接続する。
-- **環境変数:** 本番・プレビューごとに Vercel の Project Settings で設定する。例: `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、サーバー専用用途に限る `SUPABASE_SERVICE_ROLE_KEY`（設計方針どおり通常 CRUD には使わない）。
+- **環境変数:** 本番・プレビューごとに Vercel の **Project Settings → Environment Variables** で設定する。変数名・意味・値の取得元の一覧は **§3.3.1** を参照（`.env.example` と対応）。
 - **ブランチ戦略（例）:** `main` を Production に紐づけ、PR はプレビューデプロイで検証する（運用に合わせて調整可）。
 - **ビルド:** リポジトリの `package.json` に従い、`npm run build`（`next build`）をビルドコマンドとする想定。
 - **OAuth:** 本番・プレビューごとに §3.2 の Redirect URLs を Supabase 側で維持する。Vercel の Environment に設定するのは主に Supabase の URL / キーであり、Google の Client Secret は Supabase プロバイダ設定に任せる構成を想定する（実装に合わせて調整）。
+
+#### 3.3.1 環境変数一覧（ローカル・Vercel 共通の名前と取得元）
+
+**GitHub の Issue・PR・コミット本文に、実キーや本番 URL の具体値を貼らないでください。** 共有が必要な場合はプレースホルダ（例: `your-anon-key`）か、パスワードマネージャ等の社外秘匿チャネルを使います。
+
+| 変数名 | 意味 | 値の取得元 |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase プロジェクトの API オリジン（`https://<project-ref>.supabase.co` 形式） | Supabase ダッシュボード → **Project Settings** → **API** → **Project URL** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 公開 anon キー。ブラウザからのリクエストでも RLS が適用されるクライアント用 | 同上 → **Project API keys** の **anon** / **public**（Reveal で表示） |
+| `SUPABASE_SERVICE_ROLE_KEY` | サービスロールキー。**RLS をバイパスする**ため、サーバー専用の限定的な管理用途のみ。ユーザーの通常 CRUD には使わない方針 | 同上 → **service_role**（Reveal。取り扱い厳重に） |
+
+ローカルで `supabase start` を使う場合は、`supabase status` に表示される API URL と各キーを `.env` に転記する（クラウド値の代わりに差し替え）。README のセットアップ手順の入口はリポジトリ直下の `README.md` です。
 
 ### 3.4 GCP への移行（検討・Backlog）
 

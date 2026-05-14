@@ -31,25 +31,31 @@ export default async function HistoryPage() {
 
   if (!cycleResolution.success) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
         <section
           role="alert"
           data-testid="history-cycle-error"
           className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-6 text-red-900"
         >
-          <h1 className="text-2xl font-semibold text-red-950">History</h1>
+          <h1 className="text-2xl font-semibold text-red-950">履歴</h1>
           <p className="text-base font-semibold">{cycleResolution.errorMessage}</p>
           <p className="text-sm text-red-800">
             ページを再読み込みしても解消しない場合は、しばらく時間をおいてからお試しください。
             数値の整合性を保つため、履歴の集計表示は省略しています。
           </p>
         </section>
-        <div className="flex gap-2">
-          <Link href="/dashboard" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-            Dashboardへ戻る
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
+          >
+            ダッシュボードへ戻る
           </Link>
-          <Link href="/settings" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-            Settings
+          <Link
+            href="/settings"
+            className="inline-flex min-h-11 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
+          >
+            設定を開く
           </Link>
         </div>
       </main>
@@ -79,10 +85,10 @@ export default async function HistoryPage() {
   const monthlyTransactions = monthTransactionsResult.success ? monthTransactionsResult.data : [];
   const initialHistoryErrorMessage = monthTransactionsResult.success
     ? null
-    : "履歴の取得に失敗しました。表示内容が最新ではない可能性があります。";
+    : "当月の履歴を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
       <HistoryClient
         dashboardHydration={{
           logicalToday: logicalTodayString,

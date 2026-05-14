@@ -74,7 +74,7 @@ export function HistoryClient({
   }, [transactions]);
 
   const handleDelete = async (transaction: DashboardTransaction) => {
-    const isConfirmed = window.confirm("この取引を削除しますか？");
+    const isConfirmed = window.confirm("この支出を削除しますか？");
     if (!isConfirmed) {
       return;
     }
@@ -111,26 +111,33 @@ export function HistoryClient({
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-6">
+    <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">History</h1>
-          <p className="text-sm text-zinc-600">当月の論理日ベース支出履歴</p>
+          <h1 className="text-2xl font-semibold">履歴</h1>
+          <p className="text-sm text-zinc-600">当月の支出（日付は深夜帯を翌日に繰り越すルールに基づきます）</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/dashboard" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-            Dashboardへ戻る
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100 sm:flex-initial"
+          >
+            ダッシュボードへ戻る
           </Link>
-          <Link href="/settings" className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-100">
-            Settings
+          <Link
+            href="/settings"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100 sm:flex-initial"
+          >
+            設定を開く
           </Link>
         </div>
       </div>
 
       {initialHistoryErrorMessage ? (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {initialHistoryErrorMessage}
-        </p>
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p>{initialHistoryErrorMessage}</p>
+          <p className="text-xs text-amber-900/90">一覧を取り直すには、ブラウザでページを再読み込みしてください。</p>
+        </div>
       ) : null}
       {actionErrorMessage ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionErrorMessage}</p> : null}
 
@@ -140,8 +147,15 @@ export function HistoryClient({
       </div>
 
       {transactions.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-600">
-          当月の支出履歴はまだありません。
+        <div className="space-y-3 rounded-lg border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-600">
+          <p>当月の支出はまだありません。</p>
+          <p>ダッシュボードから支出を登録すると、ここに表示されます。</p>
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-slate-900 px-4 py-2.5 text-sm text-white hover:bg-slate-800"
+          >
+            ダッシュボードへ
+          </Link>
         </div>
       ) : (
         <ul className="space-y-2">
@@ -158,7 +172,7 @@ export function HistoryClient({
                   type="button"
                   onClick={() => handleDelete(transaction)}
                   disabled={isDeletingId === transaction.id}
-                  className="rounded-md border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-60"
+                  className="min-h-11 shrink-0 rounded-md border border-red-300 px-4 py-2.5 text-sm text-red-700 disabled:opacity-60"
                 >
                   {isDeletingId === transaction.id ? "削除中..." : "削除"}
                 </button>

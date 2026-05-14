@@ -54,7 +54,7 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
       await router.refresh();
       setIsSaving(false);
     } catch {
-      setErrorMessage("通信に失敗しました。ネットワークを確認してください。");
+      setErrorMessage("通信に失敗しました。ネットワークを確認し、もう一度お試しください。");
       setIsSaving(false);
     }
   };
@@ -71,8 +71,8 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
           今月の手取り給料
         </h2>
         <p className="mt-2 text-sm text-zinc-600">
-          給料日の記録として、今サイクルに使う手取り概算を入力してください。予算の基準（月収 − 固定費 −
-          光熱費概算 − 貯金ノルマ）に反映されます。
+          給料日の記録として、今サイクルに使う手取り概算を入力してください。予算の基準（月収 − 固定費合計 −
+          光熱費概算 − 月次貯金ノルマ）に反映されます。
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <label className="flex flex-col gap-1 text-sm">
@@ -83,14 +83,14 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
               required
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2"
+            className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
             />
           </label>
           {errorMessage.length > 0 ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
           <button
             type="submit"
             disabled={isSaving}
-            className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="min-h-11 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
           >
             {isSaving ? "保存中..." : "確定して続ける"}
           </button>

@@ -181,9 +181,9 @@ export function OnboardingStepForm() {
   };
 
   return (
-    <form onSubmit={(event) => event.preventDefault()} className="w-full max-w-xl space-y-6 rounded-lg border p-6">
+    <form onSubmit={(event) => event.preventDefault()} className="w-full max-w-xl space-y-6 rounded-lg border p-4 sm:p-6">
       <p className="text-sm text-zinc-500">
-        Step {currentStepIndex + 1} / {STEP_FIELD_NAMES.length}
+        ステップ {currentStepIndex + 1} / {STEP_FIELD_NAMES.length}
       </p>
       <div className="space-y-2">
         <label htmlFor={currentFieldName} className="text-base font-medium">
@@ -191,7 +191,7 @@ export function OnboardingStepForm() {
         </label>
         {currentFieldName === "target_years" ? (
           <p className="text-sm text-zinc-500">
-            ユーザーが選択した期間後の給料日が目標日になります。
+            選択した期間のあとの給料日が、目標達成日として使われます。
           </p>
         ) : null}
         {currentFieldName === "initial_total_assets" ? (
@@ -218,12 +218,12 @@ export function OnboardingStepForm() {
 
       {errorMessage.length > 0 ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={handleGoBack}
           disabled={currentStepIndex === 0 || isSubmitting}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm disabled:opacity-50"
+          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm font-medium disabled:opacity-50"
         >
           戻る
         </button>
@@ -232,7 +232,7 @@ export function OnboardingStepForm() {
             type="button"
             onClick={handleSave}
             disabled={isSubmitting}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
           >
             {isSubmitting ? "保存中..." : "保存してダッシュボードへ"}
           </button>
@@ -241,7 +241,7 @@ export function OnboardingStepForm() {
             type="button"
             onClick={handleGoNext}
             disabled={isSubmitting}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+            className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
           >
             次へ
           </button>
@@ -280,7 +280,7 @@ function renderCurrentField(params: {
             id="target_years"
             value={formValues.target_years}
             onChange={(event) => onChange("target_years", event.target.value)}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2"
+            className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
           >
             {Array.from({ length: 21 }, (_, year) => (
               <option key={year} value={String(year)}>
@@ -297,7 +297,7 @@ function renderCurrentField(params: {
             id="target_months"
             value={formValues.target_months}
             onChange={(event) => onChange("target_months", event.target.value)}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2"
+            className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
           >
             {Array.from({ length: 12 }, (_, month) => (
               <option key={month} value={String(month)}>
@@ -316,11 +316,11 @@ function renderCurrentField(params: {
         id={currentFieldName}
         value={value}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2"
+        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
       >
-        <option value="BEFORE">BEFORE（土日祝は前倒し）</option>
-        <option value="AFTER">AFTER（土日祝は後ろ倒し）</option>
-        <option value="FIXED">FIXED（補正なし）</option>
+        <option value="BEFORE">前倒し（土日祝は前の平日へ）</option>
+        <option value="AFTER">後ろ倒し（土日祝は次の平日へ）</option>
+        <option value="FIXED">固定（土日祝も給料日のまま）</option>
       </select>
     );
   }
@@ -331,10 +331,10 @@ function renderCurrentField(params: {
         id={currentFieldName}
         value={value}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2"
+        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
       >
-        <option value="STRICT">厳格モード（余剰は貯金へ）</option>
-        <option value="YUTORI">ゆとりモード（余剰は翌月の予算へ）</option>
+        <option value="STRICT">厳格（余剰は貯金へ）</option>
+        <option value="YUTORI">ゆとり（余剰は翌月の予算へ）</option>
       </select>
     );
   }
@@ -352,7 +352,7 @@ function renderCurrentField(params: {
         placeholder={isMoneyFieldName(currentFieldName) ? "例: 1,000,000" : undefined}
         value={inputValue}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2"
+        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
       />
       {helperText ? <p className="text-sm text-zinc-500">{helperText}</p> : null}
     </div>

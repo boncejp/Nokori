@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { BetaNotice } from "@/components/layout/BetaNotice";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -22,5 +23,10 @@ export default async function AppLayout({ children }: AppLayoutProps) {
     redirect("/onboarding");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <BetaNotice />
+    </div>
+  );
 }
