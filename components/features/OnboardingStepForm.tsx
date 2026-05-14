@@ -7,6 +7,7 @@ import {
   PAYDAY_RULE_VALUES,
   SURPLUS_MODE_VALUES,
 } from "@/lib/logic/onboarding-validation";
+import { HelpTooltip } from "@/components/ui/HelpTooltip";
 
 type OnboardingFormValues = {
   target_amount: string;
@@ -181,21 +182,35 @@ export function OnboardingStepForm() {
   };
 
   return (
-    <form onSubmit={(event) => event.preventDefault()} className="w-full max-w-xl space-y-6 rounded-lg border p-4 sm:p-6">
-      <p className="text-sm text-zinc-500">
+    <form onSubmit={(event) => event.preventDefault()} className="w-full max-w-xl space-y-6 rounded-lg border border-nokori-border bg-nokori-surface p-4 shadow-sm sm:p-6">
+      <p className="text-sm text-nokori-muted">
         ステップ {currentStepIndex + 1} / {STEP_FIELD_NAMES.length}
       </p>
       <div className="space-y-2">
-        <label htmlFor={currentFieldName} className="text-base font-medium">
-          {currentStepLabel}
-        </label>
+        <div className="flex items-start justify-between gap-2">
+          <label htmlFor={currentFieldName} className="text-base font-medium text-nokori-text">
+            {currentStepLabel}
+          </label>
+          {currentFieldName === "payday_rule" ? (
+            <HelpTooltip
+              ariaLabel="給料日ルールの説明"
+              description="給料日が土日祝と重なったときの扱いを選びます。前倒しは直前の平日、後ろ倒しは次の平日、固定はカレンダー日のまま給料日とみなします。"
+            />
+          ) : null}
+          {currentFieldName === "surplus_mode" ? (
+            <HelpTooltip
+              ariaLabel="余剰金処理モードの説明"
+              description="通常サイクルの給料日リセット時のみ効きます。厳格は余剰を貯金に足して翌月の使える枠は基準に戻し、ゆとりは余剰を翌月の可処分枠に織り込みます（初回サイクル締めでは使いません）。"
+            />
+          ) : null}
+        </div>
         {currentFieldName === "target_years" ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-nokori-muted">
             選択した期間のあとの給料日が、目標達成日として使われます。
           </p>
         ) : null}
         {currentFieldName === "initial_total_assets" ? (
-          <div className="space-y-2 text-sm text-zinc-600">
+          <div className="space-y-2 text-sm text-nokori-muted">
             <p>
               初回サイクルでは、現在の全財産から「次の給料日まで使う予算」を切り出し、生活費として管理します。残りは資産側の金額として扱います。
             </p>
@@ -205,7 +220,7 @@ export function OnboardingStepForm() {
           </div>
         ) : null}
         {currentFieldName === "initial_budget" ? (
-          <div className="space-y-2 text-sm text-zinc-600">
+          <div className="space-y-2 text-sm text-nokori-muted">
             <p>次の給料日までに使う予定の金額です。現在の全財産を超えては入力できません。</p>
           </div>
         ) : null}
@@ -216,14 +231,14 @@ export function OnboardingStepForm() {
         })}
       </div>
 
-      {errorMessage.length > 0 ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
+      {errorMessage.length > 0 ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={handleGoBack}
           disabled={currentStepIndex === 0 || isSubmitting}
-          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+          className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm font-medium text-nokori-navy shadow-sm transition hover:bg-nokori-subtle disabled:opacity-50"
         >
           戻る
         </button>
@@ -232,7 +247,7 @@ export function OnboardingStepForm() {
             type="button"
             onClick={handleSave}
             disabled={isSubmitting}
-            className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+            className="min-h-11 rounded-md bg-nokori-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-nokori-navy-soft disabled:opacity-60"
           >
             {isSubmitting ? "保存中..." : "保存してダッシュボードへ"}
           </button>
@@ -241,7 +256,7 @@ export function OnboardingStepForm() {
             type="button"
             onClick={handleGoNext}
             disabled={isSubmitting}
-            className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+            className="min-h-11 rounded-md bg-nokori-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-nokori-navy-soft disabled:opacity-60"
           >
             次へ
           </button>
@@ -273,14 +288,14 @@ function renderCurrentField(params: {
     return (
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label htmlFor="target_years" className="text-sm text-zinc-600">
+          <label htmlFor="target_years" className="text-sm text-nokori-muted">
             年
           </label>
           <select
             id="target_years"
             value={formValues.target_years}
             onChange={(event) => onChange("target_years", event.target.value)}
-            className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+            className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
           >
             {Array.from({ length: 21 }, (_, year) => (
               <option key={year} value={String(year)}>
@@ -290,14 +305,14 @@ function renderCurrentField(params: {
           </select>
         </div>
         <div className="space-y-1">
-          <label htmlFor="target_months" className="text-sm text-zinc-600">
+          <label htmlFor="target_months" className="text-sm text-nokori-muted">
             月
           </label>
           <select
             id="target_months"
             value={formValues.target_months}
             onChange={(event) => onChange("target_months", event.target.value)}
-            className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+            className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
           >
             {Array.from({ length: 12 }, (_, month) => (
               <option key={month} value={String(month)}>
@@ -316,7 +331,7 @@ function renderCurrentField(params: {
         id={currentFieldName}
         value={value}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+        className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
       >
         <option value="BEFORE">前倒し（土日祝は前の平日へ）</option>
         <option value="AFTER">後ろ倒し（土日祝は次の平日へ）</option>
@@ -331,7 +346,7 @@ function renderCurrentField(params: {
         id={currentFieldName}
         value={value}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+        className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
       >
         <option value="STRICT">厳格（余剰は貯金へ）</option>
         <option value="YUTORI">ゆとり（余剰は翌月の予算へ）</option>
@@ -352,9 +367,9 @@ function renderCurrentField(params: {
         placeholder={isMoneyFieldName(currentFieldName) ? "例: 1,000,000" : undefined}
         value={inputValue}
         onChange={(event) => onChange(currentFieldName, event.target.value)}
-        className="min-h-11 w-full rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+        className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
       />
-      {helperText ? <p className="text-sm text-zinc-500">{helperText}</p> : null}
+      {helperText ? <p className="text-sm text-nokori-muted">{helperText}</p> : null}
     </div>
   );
 }

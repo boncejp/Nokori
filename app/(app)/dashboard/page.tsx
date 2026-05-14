@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { DashboardClient } from "@/components/features/DashboardClient";
+import { calculateDashboardCycleMetrics } from "@/lib/logic/dashboard-cycle-metrics";
 import {
   calculateCycleWindow,
   calculateDaysUntilNextPayday,
@@ -72,6 +73,20 @@ export default async function DashboardPage() {
     ? null
     : "当日の支出一覧を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
 
+  const dashboardTransactions = transactions.map((transaction) => ({ ...transaction, isOptimistic: false }));
+  const initialMetrics = calculateDashboardCycleMetrics({
+    remainingCycleBudget: resolvedCycle.remainingCycleBudget,
+    daysUntilNextPaydayIncludingToday,
+    daysUntilNextPaydayExcludingToday,
+    utilityEstimates: {
+      ELECTRICITY: profile.estimated_electricity,
+      GAS: profile.estimated_gas,
+      WATER: profile.estimated_water,
+    },
+    transactions: dashboardTransactions,
+    isFirstCycle: resolvedCycle.isFirstCycle,
+  });
+
   const paydayPromptCycleWindow = calculateCycleWindow({
     referenceDate: logicalToday,
     payday: profile.payday,
@@ -88,10 +103,10 @@ export default async function DashboardPage() {
       : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-2xl font-semibold">ダッシュボード</h1>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 text-nokori-text">
       <DashboardClient
         salaryPrompt={salaryPrompt}
+        initialIsOverBudget={initialMetrics.isOverBudget}
         initialState={{
           logicalToday: logicalTodayString,
           isFirstCycle: resolvedCycle.isFirstCycle,
@@ -103,11 +118,12 @@ export default async function DashboardPage() {
             GAS: profile.estimated_gas,
             WATER: profile.estimated_water,
           },
-          transactions: transactions.map((transaction) => ({ ...transaction, isOptimistic: false })),
+          transactions: dashboardTransactions,
           initialTransactionsErrorMessage,
         }}
+        topSlot={<h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">ダッシュボード</h1>}
+        bottomSlot={<DashboardNavigationLinks />}
       />
-      <DashboardNavigationLinks />
     </main>
   );
 }
@@ -119,8 +135,8 @@ type DashboardErrorLayoutProps = {
 
 function DashboardErrorLayout({ errorMessage, children }: DashboardErrorLayoutProps) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="text-2xl font-semibold">ダッシュボード</h1>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 text-nokori-text">
+      <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">ダッシュボード</h1>
       <section
         role="alert"
         data-testid="dashboard-cycle-error"
@@ -142,20 +158,20 @@ function DashboardNavigationLinks() {
     <>
       <Link
         href="/history"
-        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm text-nokori-navy shadow-sm transition hover:bg-nokori-subtle sm:w-auto"
       >
         履歴を見る
       </Link>
       <Link
         href="/settings"
-        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm text-nokori-navy shadow-sm transition hover:bg-nokori-subtle sm:w-auto"
       >
         設定を開く
       </Link>
-      <form action={logoutAction}>
+      <form action={logoutAction} className="sm:ml-auto">
         <button
           type="submit"
-          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100"
+          className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm text-nokori-muted transition hover:bg-nokori-subtle sm:w-auto"
         >
           ログアウト
         </button>

@@ -66,16 +66,16 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
       aria-modal="true"
       aria-labelledby="payday-salary-title"
     >
-      <div className="max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-lg">
-        <h2 id="payday-salary-title" className="text-lg font-semibold text-slate-900">
+      <div className="max-w-md rounded-xl border border-nokori-border bg-nokori-surface p-6 shadow-xl">
+        <h2 id="payday-salary-title" className="text-lg font-semibold text-nokori-navy">
           今月の手取り給料
         </h2>
-        <p className="mt-2 text-sm text-zinc-600">
+        <p className="mt-2 text-sm text-nokori-muted">
           給料日の記録として、今サイクルに使う手取り概算を入力してください。予算の基準（月収 − 固定費合計 −
           光熱費概算 − 月次貯金ノルマ）に反映されます。
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-          <label className="flex flex-col gap-1 text-sm">
+          <label className="flex flex-col gap-1 text-sm text-nokori-text">
             <span>手取り（円）</span>
             <input
               type="number"
@@ -83,14 +83,14 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
               required
               value={value}
               onChange={(e) => setValue(e.target.value)}
-            className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+              className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
             />
           </label>
           {errorMessage.length > 0 ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
           <button
             type="submit"
             disabled={isSaving}
-            className="min-h-11 w-full rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+            className="min-h-11 w-full rounded-md bg-nokori-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-nokori-navy-soft disabled:opacity-60"
           >
             {isSaving ? "保存中..." : "確定して続ける"}
           </button>

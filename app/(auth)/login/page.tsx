@@ -30,8 +30,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-4 py-10 sm:px-6">
       <div className="w-full max-w-md space-y-2">
-        <h1 className="text-2xl font-semibold">Nokori にログイン</h1>
-        <p className="text-sm text-zinc-600">
+        <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">Nokori にログイン</h1>
+        <p className="text-sm text-nokori-muted">
           メールリンクまたは Google でログインできます。初回ログイン後はオンボーディングに進みます。
         </p>
       </div>

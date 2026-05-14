@@ -111,22 +111,22 @@ export function HistoryClient({
   };
 
   return (
-    <section className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
+    <section className="space-y-4 rounded-xl border border-nokori-border bg-nokori-surface p-4 shadow-sm sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">履歴</h1>
-          <p className="text-sm text-zinc-600">当月の支出（日付は深夜帯を翌日に繰り越すルールに基づきます）</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">履歴</h1>
+          <p className="text-sm text-nokori-muted">当月の支出（日付は深夜帯を翌日に繰り越すルールに基づきます）</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Link
             href="/dashboard"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100 sm:flex-initial"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm text-nokori-navy shadow-sm transition hover:bg-nokori-subtle sm:flex-initial"
           >
             ダッシュボードへ戻る
           </Link>
           <Link
             href="/settings"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-zinc-300 px-4 py-2.5 text-sm hover:bg-zinc-100 sm:flex-initial"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm text-nokori-navy shadow-sm transition hover:bg-nokori-subtle sm:flex-initial"
           >
             設定を開く
           </Link>
@@ -134,25 +134,25 @@ export function HistoryClient({
       </div>
 
       {initialHistoryErrorMessage ? (
-        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <p>{initialHistoryErrorMessage}</p>
-          <p className="text-xs text-amber-900/90">一覧を取り直すには、ブラウザでページを再読み込みしてください。</p>
+          <p className="text-xs text-amber-950/80">一覧を取り直すには、ブラウザでページを再読み込みしてください。</p>
         </div>
       ) : null}
       {actionErrorMessage ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionErrorMessage}</p> : null}
 
-      <div className="rounded-lg border border-zinc-200 p-4">
-        <p className="text-xs text-zinc-500">当月支出合計</p>
-        <p className="text-2xl font-semibold">{formatCurrency(monthlyTotal)}</p>
+      <div className="rounded-lg border border-nokori-border bg-nokori-subtle/60 p-4">
+        <p className="text-xs text-nokori-muted">当月支出合計</p>
+        <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(monthlyTotal)}</p>
       </div>
 
       {transactions.length === 0 ? (
-        <div className="space-y-3 rounded-lg border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-600">
+        <div className="space-y-3 rounded-lg border border-dashed border-nokori-border px-4 py-8 text-center text-sm text-nokori-muted">
           <p>当月の支出はまだありません。</p>
           <p>ダッシュボードから支出を登録すると、ここに表示されます。</p>
           <Link
             href="/dashboard"
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-slate-900 px-4 py-2.5 text-sm text-white hover:bg-slate-800"
+            className="inline-flex min-h-11 items-center justify-center rounded-md bg-nokori-navy px-4 py-2.5 text-sm text-white transition hover:bg-nokori-navy-soft"
           >
             ダッシュボードへ
           </Link>
@@ -160,13 +160,13 @@ export function HistoryClient({
       ) : (
         <ul className="space-y-2">
           {transactions.map((transaction) => (
-            <li key={transaction.id} className="rounded-lg border border-zinc-200 px-4 py-3">
+            <li key={transaction.id} className="rounded-lg border border-nokori-border bg-nokori-surface px-4 py-3 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="font-medium">{formatCurrency(transaction.amount)}</p>
-                  <p className="text-sm text-zinc-700">{formatKindLabel(transaction)}</p>
-                  <p className="text-xs text-zinc-500">{formatCreatedAt(transaction.created_at)}</p>
-                  {transaction.memo ? <p className="text-sm text-zinc-600">{transaction.memo}</p> : null}
+                  <p className="font-medium text-nokori-navy">{formatCurrency(transaction.amount)}</p>
+                  <p className="text-sm text-nokori-text">{formatKindLabel(transaction)}</p>
+                  <p className="text-xs text-nokori-muted">{formatCreatedAt(transaction.created_at)}</p>
+                  {transaction.memo ? <p className="text-sm text-nokori-muted">{transaction.memo}</p> : null}
                 </div>
                 <button
                   type="button"

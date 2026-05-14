@@ -94,17 +94,17 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <p className="text-xs leading-relaxed text-zinc-500">
+      <p className="text-xs leading-relaxed text-nokori-muted">
         Googleログインは Google の認証画面へ遷移します。認証情報およびアプリのデータは Supabase を通じて安全に扱われます。
       </p>
       <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2">
+        <label className="flex flex-col gap-2 text-nokori-text">
           <span className="text-sm font-medium">メールアドレス</span>
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="min-h-11 rounded-md border border-zinc-300 px-3 py-2.5 text-base sm:text-sm"
+            className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
             placeholder="you@example.com"
             autoComplete="email"
             required
@@ -114,7 +114,7 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
         <button
           type="submit"
           disabled={isBusy}
-          className="min-h-11 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+          className="min-h-11 rounded-md bg-nokori-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-nokori-navy-soft disabled:opacity-60"
         >
           {isEmailSubmitting ? "送信中..." : "メールでログイン"}
         </button>
@@ -124,20 +124,20 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
           onClick={() => {
             void handleGoogleLogin();
           }}
-          className="min-h-11 rounded-md border border-zinc-300 px-4 py-2.5 text-sm font-medium text-slate-900 disabled:opacity-60"
+          className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm font-medium text-nokori-navy shadow-sm transition hover:bg-nokori-subtle disabled:opacity-60"
         >
           {isGoogleSubmitting ? "リダイレクト中..." : "Googleでログイン"}
         </button>
-        {message.length > 0 ? <p className="text-sm text-emerald-700">{message}</p> : null}
+        {message.length > 0 ? <p className="text-sm text-emerald-800">{message}</p> : null}
         {errorMessage.length > 0 ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
       </form>
-      <p className="text-xs leading-relaxed text-zinc-500">
+      <p className="text-xs leading-relaxed text-nokori-muted">
         ログインまたは本サービスの利用により、
-        <Link href="/legal/terms" className="text-slate-800 underline underline-offset-2">
+        <Link href="/legal/terms" className="text-nokori-navy underline underline-offset-2">
           利用規約
         </Link>
         および
-        <Link href="/legal/privacy" className="text-slate-800 underline underline-offset-2">
+        <Link href="/legal/privacy" className="text-nokori-navy underline underline-offset-2">
           プライバシーポリシー
         </Link>
         に同意したものとみなします。
