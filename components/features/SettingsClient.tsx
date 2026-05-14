@@ -17,6 +17,7 @@ import {
   type SettingsBudgetPreviewResult,
 } from "@/lib/logic/settings-preview-simulation";
 import type { SettingsPreviewSnapshot } from "@/lib/supabase/settings-preview-snapshot";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
 
 type SettingsFormValues = {
   target_amount: string;
@@ -742,13 +743,3 @@ function FormFieldLabelRow(props: { readonly htmlFor?: string; readonly label: s
   );
 }
 
-function toNumericOnly(value: string): string {
-  return value.replace(/[^\d]/g, "");
-}
-
-function formatDigitsWithCommas(value: string): string {
-  if (value.length === 0) {
-    return "";
-  }
-  return String(Number(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}

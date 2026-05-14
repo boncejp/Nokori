@@ -34,7 +34,7 @@
 | `target_anchor_logical_date` | date | 期間計算の起点となる論理日付（オンボーディング完了日） |
 | `payday` | int | 給料日（1〜31） |
 | `payday_rule` | enum ('BEFORE', 'AFTER', 'FIXED') | 土日祝の挙動 |
-| `monthly_income` | int | 月収手取り概算 |
+| `monthly_income` | int | 月収手取り概算。オンボ初回保存では **0** とし、通常サイクル以降は給料日モーダルや設定で更新する |
 | `fixed_costs` | int | 固定費合計 |
 | `estimated_electricity` | int | 電気代概算 |
 | `estimated_gas` | int | ガス代概算 |
@@ -399,7 +399,7 @@ function processMonthlyReset(
 | 1. Infrastructure | Supabase CLIのセットアップ、SQLマイグレーション初期化、Docker環境構築 |
 | 2. Setup | Next.js + `@supabase/ssr` の初期設定、`date-fns-tz` 等の基盤整備、Vitest / Playwright のセットアップ |
 | 3. Logic | 論理日付取得、給料日算出、**初回/通常のフェーズ判定**、予算再計算関数の実装（Vitestによるテスト先行） |
-| 4. UI – Onboarding | 現在の全財産・次の給料日まで使う予算を含む全オンボーディング画面、`initial_total_assets` の保存 |
+| 4. UI – Onboarding | 現在の全財産・次の給料日まで使う予算を含む全オンボーディング画面（手取りは含めない）、`initial_total_assets` の保存。`monthly_income` は初回 0 |
 | 5. UI – Dashboard | テンキー入力・トグル（フェーズにより切替）・リアルタイム表示・翌日予算プレビュー・初回説明 |
 | 6. UI – History / Settings | スワイプ削除・リアクティブな予算復元。設定は通常サイクル時のみ月次貯金ノルマ表示（読み取り専用）を含む |
 | 7. Integration | Vercel への本番接続（環境変数・Supabase 疎通・本番ブランチでのビルド確認）。GitHub Actions は PR の Lint / テスト等を必要に応じ追加。GCP（Cloud Run）への移行は別フェーズで検討 |

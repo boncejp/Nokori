@@ -8,6 +8,7 @@ import {
   SURPLUS_MODE_VALUES,
 } from "@/lib/logic/onboarding-validation";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
 
 type OnboardingFormValues = {
   target_amount: string;
@@ -348,7 +349,7 @@ function renderCurrentField(params: {
   }
 
   const isPaydayField = currentFieldName === "payday";
-  const inputValue = isMoneyFieldName(currentFieldName) ? formatNumberWithCommas(value) : value;
+  const inputValue = isMoneyFieldName(currentFieldName) ? formatDigitsWithCommas(value) : value;
   const moneyPlaceholder = getMoneyFieldPlaceholder(currentFieldName);
   return (
     <div className="space-y-2">
@@ -403,18 +404,6 @@ function getErrorMessageFromResponseBody(body: unknown): string | null {
     return null;
   }
   return errorMessage;
-}
-
-function toNumericOnly(value: string): string {
-  return value.replace(/[^\d]/g, "");
-}
-
-function formatNumberWithCommas(value: string): string {
-  if (value.length === 0) {
-    return "";
-  }
-  const normalizedValue = String(Number(value));
-  return normalizedValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function isMoneyFieldName(fieldName: keyof OnboardingFormValues): boolean {

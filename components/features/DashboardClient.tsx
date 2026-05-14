@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { UtilityType } from "@/lib/logic/budget-logic";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
 
 import { PaydaySalaryModal } from "./PaydaySalaryModal";
 
@@ -146,7 +147,7 @@ export function DashboardClient({
     event.preventDefault();
     setFormErrorMessage("");
 
-    const parsedAmount = Number(amountInput);
+    const parsedAmount = Number(toNumericOnly(amountInput));
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setFormErrorMessage("金額は1円以上で入力してください。");
       return;
@@ -210,12 +211,13 @@ export function DashboardClient({
               <span>金額</span>
               <input
                 data-testid="expense-amount-input"
-                type="number"
-                min={1}
-                value={amountInput}
-                onChange={(event) => setAmountInput(event.target.value)}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={formatDigitsWithCommas(amountInput)}
+                onChange={(event) => setAmountInput(toNumericOnly(event.target.value))}
                 className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
-                placeholder="1500"
+                placeholder="例: 1,500"
                 required
               />
             </label>
@@ -245,7 +247,7 @@ export function DashboardClient({
                 value={memoInput}
                 onChange={(event) => setMemoInput(event.target.value)}
                 className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
-                placeholder="ランチ"
+                placeholder="例: ランチ"
                 maxLength={200}
               />
             </label>
