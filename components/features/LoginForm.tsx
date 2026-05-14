@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -130,6 +131,17 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
         {message.length > 0 ? <p className="text-sm text-emerald-700">{message}</p> : null}
         {errorMessage.length > 0 ? <p className="text-sm text-red-600">{errorMessage}</p> : null}
       </form>
+      <p className="text-xs leading-relaxed text-zinc-500">
+        ログインまたは本サービスの利用により、
+        <Link href="/legal/terms" className="text-slate-800 underline underline-offset-2">
+          利用規約
+        </Link>
+        および
+        <Link href="/legal/privacy" className="text-slate-800 underline underline-offset-2">
+          プライバシーポリシー
+        </Link>
+        に同意したものとみなします。
+      </p>
     </div>
   );
 }

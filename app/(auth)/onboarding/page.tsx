@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { OnboardingStepForm } from "@/components/features/OnboardingStepForm";
@@ -25,6 +26,17 @@ export default async function OnboardingPage() {
         <h1 className="text-2xl font-semibold">初期設定</h1>
         <p className="text-sm text-zinc-600">
           貯金目標と月次の前提を入力します。完了後、ダッシュボードへ移動します。
+        </p>
+        <p className="text-xs leading-relaxed text-zinc-500">
+          本サービスの利用により、
+          <Link href="/legal/terms" className="text-slate-800 underline underline-offset-2">
+            利用規約
+          </Link>
+          および
+          <Link href="/legal/privacy" className="text-slate-800 underline underline-offset-2">
+            プライバシーポリシー
+          </Link>
+          に同意したものとみなします。
         </p>
       </div>
       <OnboardingStepForm />
