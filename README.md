@@ -11,7 +11,7 @@ Nokori の初期開発環境です。Next.js App Router + TypeScript をベー�
 
 ## セットアップ
 
-1. 依存関係をインストールします。
+1. 依存関係をインストールします。**パッケージマネージャは npm（`package-lock.json`）のみ**とし、`pnpm-lock.yaml` はコミットしません。
 
 ```bash
 npm install
