@@ -1,8 +1,8 @@
 import {
   calculateBaseCycleBudget,
-  calculateDaysUntilNextPayday,
+  calculateCycleWindow,
   calculateMonthlySavingsQuota,
-  calculateNextPayday,
+  calculateNormalCycleDailyProrationDayCounts,
   calculateNextRemainingCycleBudget,
   calculateTargetDateFromDuration,
   type PaydayRule,
@@ -124,25 +124,21 @@ export function calculateSettingsBudgetPreview(params: {
     referenceDate: logicalToday,
   });
 
-  let nextPayday: Date;
   let daysUntilNextPaydayIncludingToday: number;
   let daysUntilNextPaydayExcludingToday: number;
   try {
-    nextPayday = calculateNextPayday({
-      fromDate: logicalToday,
+    // 日割りの分母は履歴・ダッシュと同じく「次の給料日前日」まで（給料日当日は含めない）。
+    const cycleWindow = calculateCycleWindow({
+      referenceDate: logicalToday,
       payday: draft.payday,
       paydayRule: draft.paydayRule,
     });
-    daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-      fromDate: logicalToday,
-      nextPayday,
-      includeToday: true,
+    const proration = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: cycleWindow.nextPaydayDate,
     });
-    daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-      fromDate: logicalToday,
-      nextPayday,
-      includeToday: false,
-    });
+    daysUntilNextPaydayIncludingToday = proration.daysIncludingToday;
+    daysUntilNextPaydayExcludingToday = proration.daysExcludingToday;
   } catch {
     return { status: "unavailable" };
   }

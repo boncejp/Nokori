@@ -9,6 +9,7 @@ import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashb
 type HistoryClientProps = {
   readonly dashboardHydration: {
     readonly logicalToday: string;
+    readonly anchorLogicalDate: string;
     readonly isFirstCycle: boolean;
     readonly remainingCycleBudget: number;
     readonly daysUntilNextPaydayIncludingToday: number;
@@ -87,7 +88,9 @@ export function HistoryClient({
   }, [dashboardHydration, hydrate]);
 
   useEffect(() => {
-    setTransactions(cycleTransactions);
+    queueMicrotask(() => {
+      setTransactions(cycleTransactions);
+    });
   }, [cycleTransactions]);
 
   const cycleExpenseTotal = useMemo(() => {

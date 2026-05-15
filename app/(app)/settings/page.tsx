@@ -56,7 +56,6 @@ export default async function SettingsPage() {
       profile: cycleResolution.data.profile,
       logicalToday: cycleResolution.data.logicalToday,
       isFirstCycle: cycleResolution.data.isFirstCycle,
-      nextPayday: cycleResolution.data.nextPayday,
     });
     if (snapshotResult.success) {
       previewSnapshot = snapshotResult.data;

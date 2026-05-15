@@ -4,7 +4,7 @@ import { subDays } from "date-fns";
 import {
   calculateConfirmedNormalSpentWithUtilityAdjustment,
   calculateCycleWindow,
-  calculateDaysUntilNextPayday,
+  calculateFirstCycleDailyProrationDayCounts,
   parseJstDateKeyToDate,
   sumPlainNormalExpenseAmounts,
   toJstDateString,
@@ -38,7 +38,6 @@ export async function fetchSettingsPreviewSnapshot(params: {
   readonly profile: Profile;
   readonly logicalToday: Date;
   readonly isFirstCycle: boolean;
-  readonly nextPayday: Date;
 }): Promise<Result<SettingsPreviewSnapshot>> {
   const anchorLogicalDate = parseJstDateKeyToDate(params.profile.target_anchor_logical_date);
   const cycleWindow = calculateCycleWindow({
@@ -86,17 +85,15 @@ export async function fetchSettingsPreviewSnapshot(params: {
 
   let firstCycleCalendar: SettingsPreviewSnapshot["firstCycleCalendar"] = null;
   if (params.isFirstCycle) {
+    const proration = calculateFirstCycleDailyProrationDayCounts({
+      logicalToday: params.logicalToday,
+      anchorLogicalDate,
+      payday: params.profile.payday,
+      paydayRule: params.profile.payday_rule,
+    });
     firstCycleCalendar = {
-      daysUntilNextPaydayIncludingToday: calculateDaysUntilNextPayday({
-        fromDate: params.logicalToday,
-        nextPayday: params.nextPayday,
-        includeToday: true,
-      }),
-      daysUntilNextPaydayExcludingToday: calculateDaysUntilNextPayday({
-        fromDate: params.logicalToday,
-        nextPayday: params.nextPayday,
-        includeToday: false,
-      }),
+      daysUntilNextPaydayIncludingToday: proration.daysIncludingToday,
+      daysUntilNextPaydayExcludingToday: proration.daysExcludingToday,
     };
   }
 

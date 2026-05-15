@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 
 import { HistoryClient } from "@/components/features/HistoryClient";
 import {
-  calculateDaysUntilNextPayday,
+  calculateFirstCycleDailyProrationDayCounts,
+  calculateNormalCycleDailyProrationDayCounts,
   getHistoryListingLogicalDateRange,
   parseJstDateKeyToDate,
   toJstDateString,
@@ -87,21 +88,25 @@ export default async function HistoryPage() {
   const logicalToday = resolvedCycle.logicalToday;
   const logicalTodayString = resolvedCycle.logicalTodayString;
 
-  const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday: resolvedCycle.nextPayday,
-    includeToday: true,
-  });
-  const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday: resolvedCycle.nextPayday,
-    includeToday: false,
-  });
+  const anchorLogicalDate = parseJstDateKeyToDate(profile.target_anchor_logical_date);
+  const prorationDayCounts = resolvedCycle.isFirstCycle
+    ? calculateFirstCycleDailyProrationDayCounts({
+        logicalToday,
+        anchorLogicalDate,
+        payday: profile.payday,
+        paydayRule: profile.payday_rule,
+      })
+    : calculateNormalCycleDailyProrationDayCounts({
+        logicalToday,
+        nextPaydayDate: resolvedCycle.nextPayday,
+      });
+  const daysUntilNextPaydayIncludingToday = prorationDayCounts.daysIncludingToday;
+  const daysUntilNextPaydayExcludingToday = prorationDayCounts.daysExcludingToday;
 
   const todayTransactionsResult = await listTransactionsByLogicalDate(supabase, logicalToday);
   const historyLogicalRange = getHistoryListingLogicalDateRange({
     logicalToday,
-    anchorLogicalDate: parseJstDateKeyToDate(profile.target_anchor_logical_date),
+    anchorLogicalDate,
     payday: profile.payday,
     paydayRule: profile.payday_rule,
     isFirstCycle: resolvedCycle.isFirstCycle,
@@ -128,6 +133,7 @@ export default async function HistoryPage() {
       <HistoryClient
         dashboardHydration={{
           logicalToday: logicalTodayString,
+          anchorLogicalDate: profile.target_anchor_logical_date,
           isFirstCycle: resolvedCycle.isFirstCycle,
           remainingCycleBudget: resolvedCycle.remainingCycleBudget,
           daysUntilNextPaydayIncludingToday,

@@ -603,6 +603,61 @@ export function getFirstCycleEndLogicalDate(params: {
 }
 
 /**
+ * 初回サイクル中の日次予算の分母に使う残り日数。
+ * 終端は `getFirstCycleEndLogicalDate` と同一（次の給料日当日は含めず、前日まで）。
+ */
+export function calculateFirstCycleDailyProrationDayCounts(params: {
+  readonly logicalToday: Date;
+  readonly anchorLogicalDate: Date;
+  readonly payday: number;
+  readonly paydayRule: PaydayRule;
+}): {
+  readonly daysIncludingToday: number;
+  readonly daysExcludingToday: number;
+} {
+  const firstCycleEnd = getFirstCycleEndLogicalDate({
+    anchorLogicalDate: params.anchorLogicalDate,
+    payday: params.payday,
+    paydayRule: params.paydayRule,
+  });
+  const todayJstStart = startOfDay(toZonedTime(params.logicalToday, TIMEZONE));
+  const endJstStart = startOfDay(toZonedTime(firstCycleEnd, TIMEZONE));
+  const diff = differenceInCalendarDays(endJstStart, todayJstStart);
+  if (diff < 0) {
+    throw new Error("logicalToday must not be after first cycle end");
+  }
+  return {
+    daysIncludingToday: diff + 1,
+    daysExcludingToday: diff,
+  };
+}
+
+/**
+ * 通常サイクル中の日次予算の分母に使う残り日数。
+ * 終端は `getHistoryListingLogicalDateRange` の通常分岐の `to`
+ *（`subDays(calculateCycleWindow(...).nextPaydayDate, 1)`）と同一。
+ */
+export function calculateNormalCycleDailyProrationDayCounts(params: {
+  readonly logicalToday: Date;
+  readonly nextPaydayDate: Date;
+}): {
+  readonly daysIncludingToday: number;
+  readonly daysExcludingToday: number;
+} {
+  const cycleEndLogicalDate = toJstStartOfDay(subDays(params.nextPaydayDate, 1));
+  const todayJstStart = startOfDay(toZonedTime(params.logicalToday, TIMEZONE));
+  const endJstStart = startOfDay(toZonedTime(cycleEndLogicalDate, TIMEZONE));
+  const diff = differenceInCalendarDays(endJstStart, todayJstStart);
+  if (diff < 0) {
+    throw new Error("logicalToday must not be after cycle end (day before next payday)");
+  }
+  return {
+    daysIncludingToday: diff + 1,
+    daysExcludingToday: diff,
+  };
+}
+
+/**
  * 初回サイクル中かどうかを判定する。
  * 初回サイクル = target_anchor_logical_date（論理日）から最初の給料日前日まで。
  */

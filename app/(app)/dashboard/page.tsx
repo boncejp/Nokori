@@ -5,7 +5,9 @@ import { DashboardClient } from "@/components/features/DashboardClient";
 import { calculateDashboardCycleMetrics } from "@/lib/logic/dashboard-cycle-metrics";
 import {
   calculateCycleWindow,
-  calculateDaysUntilNextPayday,
+  calculateFirstCycleDailyProrationDayCounts,
+  calculateNormalCycleDailyProrationDayCounts,
+  parseJstDateKeyToDate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
 import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
@@ -58,16 +60,20 @@ export default async function DashboardPage() {
   const logicalTodayString = resolvedCycle.logicalTodayString;
   const logicalToday = resolvedCycle.logicalToday;
 
-  const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday: resolvedCycle.nextPayday,
-    includeToday: true,
-  });
-  const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-    fromDate: logicalToday,
-    nextPayday: resolvedCycle.nextPayday,
-    includeToday: false,
-  });
+  const anchorLogicalDate = parseJstDateKeyToDate(profile.target_anchor_logical_date);
+  const prorationDayCounts = resolvedCycle.isFirstCycle
+    ? calculateFirstCycleDailyProrationDayCounts({
+        logicalToday,
+        anchorLogicalDate,
+        payday: profile.payday,
+        paydayRule: profile.payday_rule,
+      })
+    : calculateNormalCycleDailyProrationDayCounts({
+        logicalToday,
+        nextPaydayDate: resolvedCycle.nextPayday,
+      });
+  const daysUntilNextPaydayIncludingToday = prorationDayCounts.daysIncludingToday;
+  const daysUntilNextPaydayExcludingToday = prorationDayCounts.daysExcludingToday;
   const transactionsResult = await listTransactionsByLogicalDate(supabase, logicalToday);
   const transactions = transactionsResult.success ? transactionsResult.data : [];
   const initialTransactionsErrorMessage = transactionsResult.success
@@ -110,6 +116,7 @@ export default async function DashboardPage() {
         initialIsOverBudget={initialMetrics.isOverBudget}
         initialState={{
           logicalToday: logicalTodayString,
+          anchorLogicalDate: profile.target_anchor_logical_date,
           isFirstCycle: resolvedCycle.isFirstCycle,
           remainingCycleBudget: resolvedCycle.remainingCycleBudget,
           daysUntilNextPaydayIncludingToday,

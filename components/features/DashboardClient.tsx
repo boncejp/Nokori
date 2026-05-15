@@ -18,6 +18,7 @@ type DashboardClientProps = {
   } | null;
   readonly initialState: {
     readonly logicalToday: string;
+    readonly anchorLogicalDate: string;
     readonly isFirstCycle: boolean;
     readonly remainingCycleBudget: number;
     readonly daysUntilNextPaydayIncludingToday: number;
@@ -137,7 +138,9 @@ export function DashboardClient({
 
   useEffect(() => {
     hydrate(initialState);
-    setDisplayOverBudget(useDashboardStore.getState().isOverBudget);
+    queueMicrotask(() => {
+      setDisplayOverBudget(useDashboardStore.getState().isOverBudget);
+    });
     const unsubscribe = useDashboardStore.subscribe((state) => {
       setDisplayOverBudget(state.isOverBudget);
     });

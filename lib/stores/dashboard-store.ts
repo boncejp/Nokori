@@ -4,9 +4,11 @@ import { create } from "zustand";
 
 import { calculateDashboardCycleMetrics } from "@/lib/logic/dashboard-cycle-metrics";
 import {
-  calculateDaysUntilNextPayday,
-  calculateNextPayday,
+  calculateCycleWindow,
+  calculateFirstCycleDailyProrationDayCounts,
+  calculateNormalCycleDailyProrationDayCounts,
   getLogicalDate,
+  parseJstDateKeyToDate,
   type UtilityType,
 } from "@/lib/logic/budget-logic";
 
@@ -38,6 +40,7 @@ type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
 type DashboardHydration = {
   readonly logicalToday: string;
+  readonly anchorLogicalDate: string;
   readonly isFirstCycle: boolean;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
@@ -58,6 +61,7 @@ type DashboardComputedMetrics = {
 
 type DashboardStoreState = {
   readonly logicalToday: string;
+  readonly anchorLogicalDate: string;
   readonly isFirstCycle: boolean;
   readonly remainingCycleBudget: number;
   readonly daysUntilNextPaydayIncludingToday: number;
@@ -200,6 +204,7 @@ function resolveLogicalTodayDate(logicalToday: string): Date {
 
 export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
   logicalToday: "",
+  anchorLogicalDate: "",
   isFirstCycle: false,
   remainingCycleBudget: 0,
   daysUntilNextPaydayIncludingToday: 1,
@@ -220,6 +225,7 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
     set({
       remainingCycleBudget: payload.remainingCycleBudget,
       logicalToday: payload.logicalToday,
+      anchorLogicalDate: payload.anchorLogicalDate,
       isFirstCycle: payload.isFirstCycle,
       daysUntilNextPaydayIncludingToday: payload.daysUntilNextPaydayIncludingToday,
       daysUntilNextPaydayExcludingToday: payload.daysUntilNextPaydayExcludingToday,
@@ -232,21 +238,23 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
   applyProfileSettings: (payload) => {
     const previousState = get();
     const logicalTodayDate = resolveLogicalTodayDate(previousState.logicalToday);
-    const nextPayday = calculateNextPayday({
-      fromDate: logicalTodayDate,
-      payday: payload.payday,
-      paydayRule: payload.paydayRule,
-    });
-    const daysUntilNextPaydayIncludingToday = calculateDaysUntilNextPayday({
-      fromDate: logicalTodayDate,
-      nextPayday,
-      includeToday: true,
-    });
-    const daysUntilNextPaydayExcludingToday = calculateDaysUntilNextPayday({
-      fromDate: logicalTodayDate,
-      nextPayday,
-      includeToday: false,
-    });
+    const prorationDayCounts = previousState.isFirstCycle
+      ? calculateFirstCycleDailyProrationDayCounts({
+          logicalToday: logicalTodayDate,
+          anchorLogicalDate: parseJstDateKeyToDate(previousState.anchorLogicalDate),
+          payday: payload.payday,
+          paydayRule: payload.paydayRule,
+        })
+      : calculateNormalCycleDailyProrationDayCounts({
+          logicalToday: logicalTodayDate,
+          nextPaydayDate: calculateCycleWindow({
+            referenceDate: logicalTodayDate,
+            payday: payload.payday,
+            paydayRule: payload.paydayRule,
+          }).nextPaydayDate,
+        });
+    const daysUntilNextPaydayIncludingToday = prorationDayCounts.daysIncludingToday;
+    const daysUntilNextPaydayExcludingToday = prorationDayCounts.daysExcludingToday;
     const computed = calculateComputedMetrics({
       remainingCycleBudget: payload.remainingCycleBudget,
       daysUntilNextPaydayIncludingToday,

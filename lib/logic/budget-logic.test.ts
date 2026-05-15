@@ -6,6 +6,8 @@ import {
   calculateDailyBudgetFuture,
   calculateDailyBudgetToday,
   calculateDaysUntilNextPayday,
+  calculateFirstCycleDailyProrationDayCounts,
+  calculateNormalCycleDailyProrationDayCounts,
   calculateMonthlySavingsQuota,
   calculateNextRemainingCycleBudget,
   calculateRemainingMonthsToTarget,
@@ -26,6 +28,7 @@ import {
   shouldExecuteMonthlyReset,
   sumPlainNormalExpenseAmounts,
 } from "./budget-logic";
+import { calculateDashboardCycleMetrics } from "./dashboard-cycle-metrics";
 
 function formatJstDate(date: Date): string {
   return new Intl.DateTimeFormat("ja-JP", {
@@ -108,6 +111,170 @@ describe("daily budget calculations", () => {
       daysUntilNextPaydayExcludingToday: 0,
     });
     expect(result).toBe(5_000);
+  });
+});
+
+describe("calculateFirstCycleDailyProrationDayCounts", () => {
+  it("初回開始日・給料日15・前倒しでは次の給料日前日までを分母に含め当日32日扱いにしない", () => {
+    const anchor = parseJstDateKeyToDate("2026-05-15");
+    const logicalToday = new Date("2026-05-15T12:00:00+09:00");
+    const counts = calculateFirstCycleDailyProrationDayCounts({
+      logicalToday,
+      anchorLogicalDate: anchor,
+      payday: 15,
+      paydayRule: "BEFORE",
+    });
+    expect(counts.daysIncludingToday).toBe(31);
+    expect(counts.daysExcludingToday).toBe(30);
+
+    const wrongIncluding = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday: new Date("2026-06-15T00:00:00+09:00"),
+      includeToday: true,
+    });
+    const wrongExcluding = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday: new Date("2026-06-15T00:00:00+09:00"),
+      includeToday: false,
+    });
+    expect(wrongIncluding).toBe(32);
+    expect(wrongExcluding).toBe(31);
+
+    const range = getHistoryListingLogicalDateRange({
+      logicalToday,
+      anchorLogicalDate: anchor,
+      payday: 15,
+      paydayRule: "BEFORE",
+      isFirstCycle: true,
+    });
+    expect(formatJstDate(range.to)).toBe("2026-06-14");
+  });
+
+  it("初回最終日では翌日以降の日数が0になり履歴の終端日と一致する", () => {
+    const anchor = parseJstDateKeyToDate("2026-05-15");
+    const logicalToday = new Date("2026-06-14T12:00:00+09:00");
+    const counts = calculateFirstCycleDailyProrationDayCounts({
+      logicalToday,
+      anchorLogicalDate: anchor,
+      payday: 15,
+      paydayRule: "BEFORE",
+    });
+    expect(counts.daysIncludingToday).toBe(1);
+    expect(counts.daysExcludingToday).toBe(0);
+
+    const range = getHistoryListingLogicalDateRange({
+      logicalToday,
+      anchorLogicalDate: anchor,
+      payday: 15,
+      paydayRule: "BEFORE",
+      isFirstCycle: true,
+    });
+    expect(formatJstDate(range.to)).toBe(formatJstDate(logicalToday));
+  });
+
+  it("初回・initial_budget 20_000・支出0のとき当日/翌日以降の日割りが 31 日・30 日基準になる", () => {
+    const anchor = parseJstDateKeyToDate("2026-05-15");
+    const logicalToday = new Date("2026-05-15T12:00:00+09:00");
+    const { daysIncludingToday, daysExcludingToday } = calculateFirstCycleDailyProrationDayCounts({
+      logicalToday,
+      anchorLogicalDate: anchor,
+      payday: 15,
+      paydayRule: "BEFORE",
+    });
+    const metrics = calculateDashboardCycleMetrics({
+      remainingCycleBudget: 20_000,
+      daysUntilNextPaydayIncludingToday: daysIncludingToday,
+      daysUntilNextPaydayExcludingToday: daysExcludingToday,
+      utilityEstimates: { ELECTRICITY: 0, GAS: 0, WATER: 0 },
+      transactions: [],
+      isFirstCycle: true,
+    });
+    expect(metrics.dailyBudgetToday).toBeCloseTo(20_000 / 31, 10);
+    expect(metrics.futureDailyBudget).toBeCloseTo(20_000 / 30, 10);
+    expect(metrics.dailyBudgetToday).not.toBeCloseTo(20_000 / 32, 10);
+    expect(metrics.futureDailyBudget).not.toBeCloseTo(20_000 / 31, 10);
+  });
+});
+
+describe("calculateNormalCycleDailyProrationDayCounts", () => {
+  it("次の給料日前日までを終端にし、旧 calculateDaysUntilNextPayday(給料日当日) より1日少ない", () => {
+    const logicalToday = new Date("2026-05-15T12:00:00+09:00");
+    const window = calculateCycleWindow({
+      referenceDate: logicalToday,
+      payday: 25,
+      paydayRule: "FIXED",
+    });
+    expect(formatJstDate(window.nextPaydayDate)).toBe("2026-05-25");
+
+    const counts = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: window.nextPaydayDate,
+    });
+    const range = getHistoryListingLogicalDateRange({
+      logicalToday,
+      anchorLogicalDate: parseJstDateKeyToDate("2026-04-10"),
+      payday: 25,
+      paydayRule: "FIXED",
+      isFirstCycle: false,
+    });
+    expect(formatJstDate(range.to)).toBe("2026-05-24");
+
+    const wrongIncluding = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday: window.nextPaydayDate,
+      includeToday: true,
+    });
+    const wrongExcluding = calculateDaysUntilNextPayday({
+      fromDate: logicalToday,
+      nextPayday: window.nextPaydayDate,
+      includeToday: false,
+    });
+    expect(wrongIncluding).toBe(counts.daysIncludingToday + 1);
+    expect(wrongExcluding).toBe(counts.daysExcludingToday + 1);
+    expect(counts.daysIncludingToday).toBe(10);
+    expect(counts.daysExcludingToday).toBe(9);
+  });
+
+  it("通常サイクル最終日では翌日以降の日数が0になり D_future は残額ベースになる", () => {
+    const logicalToday = new Date("2026-05-24T12:00:00+09:00");
+    const nextPayday = new Date("2026-05-25T00:00:00+09:00");
+    const counts = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: nextPayday,
+    });
+    expect(counts.daysIncludingToday).toBe(1);
+    expect(counts.daysExcludingToday).toBe(0);
+    const future = calculateDailyBudgetFuture({
+      remainingCycleBudget: 20_000,
+      todaySpent: 0,
+      daysUntilNextPaydayExcludingToday: counts.daysExcludingToday,
+    });
+    expect(future).toBe(20_000);
+  });
+
+  it("通常サイクル・残予算 39_000・支出0で分母が意図どおりなら日割りが揃う", () => {
+    const logicalToday = new Date("2026-05-15T12:00:00+09:00");
+    const window = calculateCycleWindow({
+      referenceDate: logicalToday,
+      payday: 25,
+      paydayRule: "FIXED",
+    });
+    const { daysIncludingToday, daysExcludingToday } = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: window.nextPaydayDate,
+    });
+    const metrics = calculateDashboardCycleMetrics({
+      remainingCycleBudget: 39_000,
+      daysUntilNextPaydayIncludingToday: daysIncludingToday,
+      daysUntilNextPaydayExcludingToday: daysExcludingToday,
+      utilityEstimates: { ELECTRICITY: 0, GAS: 0, WATER: 0 },
+      transactions: [],
+      isFirstCycle: false,
+    });
+    expect(metrics.dailyBudgetToday).toBeCloseTo(39_000 / 10, 10);
+    expect(metrics.futureDailyBudget).toBeCloseTo(39_000 / 9, 10);
+    expect(metrics.dailyBudgetToday).not.toBeCloseTo(39_000 / 11, 10);
+    expect(metrics.futureDailyBudget).not.toBeCloseTo(39_000 / 10, 10);
   });
 });
 
