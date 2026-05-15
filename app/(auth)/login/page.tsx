@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { NokoriAppIcon } from "@/components/brand/NokoriAppIcon";
 import { LoginForm } from "@/components/features/LoginForm";
-import { fetchProfileByUserId } from "@/lib/supabase/profiles";
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type LoginPageProps = {
@@ -21,11 +21,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    const profileResult = await fetchProfileByUserId(supabase, user.id);
-    if (profileResult.success) {
-      redirect("/dashboard");
-    }
-    redirect("/onboarding");
+    redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
   return (
@@ -35,7 +31,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="w-full space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">Nokori にログイン</h1>
           <p className="text-sm text-nokori-muted">
-            メールリンクまたは Google でログインできます。初回ログイン後はオンボーディングに進みます。
+            メールリンクまたは Google でログインできます。初回はウェルカムのあと初期設定に進みます。
           </p>
         </div>
       </div>

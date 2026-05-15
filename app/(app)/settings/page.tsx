@@ -10,6 +10,7 @@ import {
   parseJstDateKeyToDate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { resolveDashboardCycle } from "@/lib/supabase/dashboard-cycle-resolve";
 import { fetchSettingsPreviewSnapshot } from "@/lib/supabase/settings-preview-snapshot";
@@ -27,7 +28,7 @@ export default async function SettingsPage() {
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
-    redirect("/onboarding");
+    redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
   const cycleResolution = await resolveDashboardCycle({

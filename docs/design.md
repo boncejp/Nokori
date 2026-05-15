@@ -129,6 +129,12 @@ MVP の本番は **Vercel を第一選択**とし、必ずしもこの Docker �
 
 上記はいずれも **RLS 前提の anon キー利用**や「**service_role は通常 CRUD に使わない**」という既存方針と矛盾しない（OAuth は Auth のフロー設定の話である）。
 
+#### 初回ウェルカムと `user_welcome`
+
+- **目的:** プロフィール作成前のユーザーに、**コンセプトのみ**を伝える `/welcome` を一度だけ挟み、「新しいアプリを始める」体験を整える。運用説明やヘルプ本文は本画面では扱わず、従来どおりアプリ内ヘルプ等に任せる。
+- **遷移:** ログイン済みで `profiles` が未作成のとき、`public.user_welcome` に行が**ない**場合は `/welcome` へ。CTA で `POST /api/welcome/complete` が `user_welcome` へ UPSERT（`completed_at`）したあと `/onboarding` へ進む。**行がある**（ウェルカム済み）なら従来どおり `/onboarding` のみ。`profiles` が存在するユーザーは `/welcome` を経由しない。直接 URL を開いた場合のすり抜けは、サーバー側で `/welcome` と `/onboarding` の双方から相互にリダイレクトして防ぐ（無限ループにならないよう、条件は「プロフィール有無」と「`user_welcome` の有無」で排他的に決める）。
+- **テーブル `public.user_welcome`:** `user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`、`completed_at timestamptz NOT NULL DEFAULT now()`。**未完了は行なし**、完了で INSERT/UPSERT とする。RLS は `user_id = auth.uid()` のみ SELECT/INSERT/UPDATE 可（`profiles` と同様の方針）。
+
 ### 3.3 Vercel 本番デプロイ（MVP）
 
 - **ホスティング:** Vercel 上で Next.js アプリをビルド・配信する。ホスト型 Supabase（PostgreSQL / Auth）へは、クライアント・サーバー双方から既存どおり HTTPS 経由で接続する。
@@ -347,6 +353,7 @@ function processMonthlyReset(
 ## 5. UI/UX & PWA 設計
 
 - **Design:** Apple風ミニマリズム。Navy (#001F3F) 主体。
+- **Welcome（初回のみ）:** ログイン後・オンボーディング前の `/welcome`。プロダクトコンセプトの短いコピーとリッチな（CSS ベースの）入場アニメーション。完了状態は `user_welcome` に永続化し、再ログインでは表示しない。
 - **Alert UI:** `remainingToday < 0`（今日の残り予算が 0 未満）をトリガーに、**「今日の残り予算」の表示**と短い警告文を赤系で強調する。レイアウト全体を赤系のテーマや背景で覆い替える要件ではない（当該表示に限定。要件定義書 §3.2 と整合）。
 - **Dashboard（初回サイクル）:** 普通支出のみ入力可能。光熱費・特別支出トグルは非表示または無効化。要件定義書に記載の「初回サイクル用説明」テキストを表示。
 - **Dashboard（通常サイクル）:** 普通支出 / 特別支出 / 光熱費のトグルを有効化。

@@ -8,6 +8,7 @@ import {
   calculateDaysUntilNextPayday,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { resolveDashboardCycle } from "@/lib/supabase/dashboard-cycle-resolve";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { listTransactionsByLogicalDate } from "@/lib/supabase/transactions";
@@ -35,7 +36,7 @@ export default async function DashboardPage() {
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
-    redirect("/onboarding");
+    redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
   const cycleResolution = await resolveDashboardCycle({

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
@@ -13,10 +13,5 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  const profileResult = await fetchProfileByUserId(supabase, user.id);
-  if (!profileResult.success) {
-    redirect("/onboarding");
-  }
-
-  redirect("/dashboard");
+  redirect(await resolvePostAuthLandingPath(supabase, user.id));
 }

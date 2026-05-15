@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { OnboardingStepForm } from "@/components/features/OnboardingStepForm";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { fetchUserWelcomeByUserId } from "@/lib/supabase/user-welcome";
 
 export default async function OnboardingPage() {
   const supabase = await createSupabaseServerClient();
@@ -18,6 +19,11 @@ export default async function OnboardingPage() {
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (profileResult.success) {
     redirect("/dashboard");
+  }
+
+  const welcomeResult = await fetchUserWelcomeByUserId(supabase, user.id);
+  if (!welcomeResult.success || welcomeResult.data === null) {
+    redirect("/welcome");
   }
 
   return (

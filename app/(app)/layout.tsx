@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AppBrandHeader } from "@/components/layout/AppBrandHeader";
 import { BetaNotice } from "@/components/layout/BetaNotice";
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -21,7 +22,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
-    redirect("/onboarding");
+    redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
   return (
