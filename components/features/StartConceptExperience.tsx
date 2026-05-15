@@ -154,7 +154,7 @@ export function StartConceptExperience() {
                 type="button"
                 onClick={handleContinue}
                 disabled={isSubmitting}
-                className="welcome-cta start-concept-cta min-h-12 w-full max-w-xs rounded-xl bg-nokori-navy px-6 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-nokori-navy-soft disabled:opacity-60 sm:min-h-11"
+                className="start-concept-cta min-h-12 w-full max-w-xs rounded-xl bg-nokori-navy px-6 py-3 text-sm font-semibold text-white shadow-md hover:bg-nokori-navy-soft disabled:opacity-60 sm:min-h-11"
               >
                 {isSubmitting ? "保存しています…" : "ダッシュボードへ"}
               </button>

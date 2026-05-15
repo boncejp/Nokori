@@ -243,7 +243,7 @@ export function SettingsClient({
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">設定</h1>
           <p className="text-sm text-nokori-muted">予算・給料日・光熱費の前提値を更新できます。</p>
           <p className="mt-1 text-xs text-nokori-muted leading-relaxed">
-            日付の扱い: 「今日」や取引の集計に使う日付は論理日で、日本時間では毎日午前3:00が前日と当日の切り替えです（午前0:00〜2:59に登録した取引は前日扱い）。
+            日付の扱い: 「今日」や取引の集計に使う日付は、日本時間で毎日午前3:00が前日と当日の切り替わりタイミングです（午前0:00〜2:59に登録した取引は前日扱い）。
           </p>
         </div>
         <Link
@@ -273,7 +273,7 @@ export function SettingsClient({
             onChange={handleChangeValue}
           />
           <ReadOnlyField label="目標日（自動算出）" value={targetDateShown} />
-          <ReadOnlyField label="現在の貯金総額（資産側）" value={formatNumberDisplay(formValues.current_total_savings_display)} />
+          <ReadOnlyField label="現在の貯金総額" value={formatNumberDisplay(formValues.current_total_savings_display)} />
           {showMonthlySavingsQuota && monthlySavingsQuota !== null ? (
             <ReadOnlyField
               label="月次貯金ノルマ（確定値）"
@@ -362,7 +362,7 @@ export function SettingsClient({
           ) : null}
           {previewContext.isFirstCycle ? (
             <NumberField
-              label="次の給料日まで使う予算（サイクル基準）"
+              label="次の給料日まで使う予算"
               name="initial_budget"
               value={formValues.initial_budget}
               onChange={handleChangeValue}
@@ -424,11 +424,11 @@ function SettingsPreviewSection(props: {
 
   return (
     <section className="rounded-lg border border-nokori-border bg-nokori-subtle/80 p-4" aria-label="保存前プレビュー">
-      <h2 className="text-base font-semibold text-nokori-navy">保存前プレビュー（動的シミュレーション）</h2>
+      <h2 className="text-base font-semibold text-nokori-navy">保存前プレビュー</h2>
       {isFirstCycle ? (
         <p className="mt-2 text-sm text-nokori-muted">
           <strong className="text-nokori-text">初回サイクル:</strong>{" "}
-          当日・翌日以降の日次プレビューは「次の給料日まで使う予算」だけが反映されます。他の項目を変えても日次は原則変わりません。月次貯金ノルマは通常サイクル（2回目以降）から適用されるため、このフェーズではプレビューに含めていません。
+          当日・翌日以降の日次プレビューは「次の給料日まで使う予算」の変更だけが反映されます。他の項目を変えても日次プレビューは原則変わりません。
         </p>
       ) : (
         <p className="mt-2 text-sm text-nokori-muted">

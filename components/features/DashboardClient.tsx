@@ -277,16 +277,18 @@ export function DashboardClient({
         </form>
 
         {isFirstCycle ? (
-          <div className="rounded-lg border border-nokori-border bg-nokori-subtle px-4 py-3 text-sm text-nokori-text">
-            <p className="font-medium text-nokori-navy">初回サイクルについて</p>
-            <ul className="mt-2 list-inside list-disc space-y-1.5 text-nokori-muted">
-              <li>初回サイクルでは、次の給料日まで使う予算だけを「普通支出」として管理します。</li>
+          <details className="rounded-lg border border-nokori-border bg-nokori-subtle px-3 py-1 text-sm text-nokori-text">
+            <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-nokori-navy">
+              初回サイクルについて
+            </summary>
+            <ul className="mt-2 list-inside list-disc space-y-1.5 pb-3 text-nokori-muted">
+              <li>初回サイクルでは、「次の給料日まで使う予算」を「普通支出」としてのみ管理します。</li>
               <li>光熱費と特別支出の詳細管理は、次の給料日以降の通常サイクルから利用できます。</li>
               <li>
                 通常サイクルでは、光熱費は概算との差額を残り予算へ反映し、特別支出は貯金総額から直接差し引いて月次貯金ノルマを再計算します。
               </li>
             </ul>
-          </div>
+          </details>
         ) : null}
 
         <div className="space-y-2">

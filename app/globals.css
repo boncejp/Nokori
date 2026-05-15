@@ -150,13 +150,8 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .welcome-cta {
-    transition:
-      transform 0.2s ease,
-      box-shadow 0.2s ease,
-      background-color 0.2s ease;
-  }
-
+  /* /start の CTA は welcome-cta と併用しない（アニメ完了後の transform と hover の二重指定を避ける） */
+  .welcome-cta,
   .start-concept-cta {
     transition:
       transform 0.2s ease,
@@ -164,11 +159,7 @@ body {
       background-color 0.2s ease;
   }
 
-  .welcome-cta:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 12px 28px -8px rgba(0, 31, 63, 0.35);
-  }
-
+  .welcome-cta:hover:not(:disabled),
   .start-concept-cta:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 12px 28px -8px rgba(0, 31, 63, 0.35);

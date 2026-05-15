@@ -94,9 +94,6 @@ export function LoginForm({ authErrorFromCallback = false }: LoginFormProps) {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-4">
-      <p className="text-xs leading-relaxed text-nokori-muted">
-        Googleログインは Google の認証画面へ遷移します。認証情報およびアプリのデータは Supabase を通じて安全に扱われます。
-      </p>
       <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
         <label className="flex flex-col gap-2 text-nokori-text">
           <span className="text-sm font-medium">メールアドレス</span>

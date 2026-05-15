@@ -134,10 +134,22 @@ export function HistoryClient({
   return (
     <section className="space-y-4 rounded-xl border border-nokori-border bg-nokori-surface p-4 shadow-sm sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1 space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">履歴</h1>
           <p className="mt-1 text-sm font-medium text-nokori-text">このサイクル内の支出</p>
-          <p className="mt-2 text-sm leading-relaxed text-nokori-muted">{cycleListingDescription}</p>
+          <p className="text-xs leading-relaxed text-nokori-muted">
+            集計の範囲や日付の切り替えは、下の「集計の説明」を開いて確認できます。
+          </p>
+          <details className="rounded-md border border-nokori-border bg-nokori-surface text-nokori-text">
+            <summary className="min-h-11 cursor-pointer select-none px-3 py-2 text-sm font-medium text-nokori-navy outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/35 focus-visible:ring-inset">
+              集計の説明
+            </summary>
+            <div className="border-t border-nokori-border/70 px-3 pb-3 pt-2">
+              <p className="max-h-[min(45vh,22rem)] max-w-[min(42rem,100%)] overflow-y-auto text-sm leading-relaxed text-nokori-muted">
+                {cycleListingDescription}
+              </p>
+            </div>
+          </details>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Link
@@ -187,7 +199,7 @@ export function HistoryClient({
                 <div className="space-y-1">
                   <p className="font-medium text-nokori-navy">{formatCurrency(transaction.amount)}</p>
                   <p className="text-sm text-nokori-text">{formatKindLabel(transaction)}</p>
-                  <p className="text-xs text-nokori-muted">論理日: {formatLogicalDateJa(transaction.logical_date)}</p>
+                  <p className="text-xs text-nokori-muted">集計日: {formatLogicalDateJa(transaction.logical_date)}</p>
                   <p className="text-xs text-nokori-muted">登録日時: {formatCreatedAt(transaction.created_at)}</p>
                   {transaction.memo ? <p className="text-sm text-nokori-muted">{transaction.memo}</p> : null}
                 </div>

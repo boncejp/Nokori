@@ -120,8 +120,8 @@ export default async function HistoryPage() {
   const rangeFromKey = toJstDateString(historyLogicalRange.from);
   const rangeToKey = toJstDateString(historyLogicalRange.to);
   const cycleListingDescription = resolvedCycle.isFirstCycle
-    ? `この一覧は、論理日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」から「${formatJapaneseLogicalDateLabel(rangeToKey)}」まで（初回サイクル）に計上された支出です。次の給料日を迎えると通常サイクルに切り替わり、集計の始まりは給料日（論理日）になります。表示する日付は論理日で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59に登録した支出は、まだ前日の内訳として集計されます）。`
-    : `この一覧は、今回のサイクル（論理日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」（給料日）から「${formatJapaneseLogicalDateLabel(rangeToKey)}」（次の給料日の前日）まで）の支出です。表示する日付は論理日で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59は前日扱い）。`;
+    ? `この一覧は、集計日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」から「${formatJapaneseLogicalDateLabel(rangeToKey)}」まで（初回サイクル）に計上された支出です。次の給料日を迎えると通常サイクルに切り替わり、集計の始まりは給料日にそろいます。表示する日付は取引の集計に使う日付で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59に登録した支出は、まだ前日の内訳として集計されます）。`
+    : `この一覧は、今回のサイクル（集計日「${formatJapaneseLogicalDateLabel(rangeFromKey)}」（給料日）から「${formatJapaneseLogicalDateLabel(rangeToKey)}」（次の給料日の前日）まで）の支出です。表示する日付は取引の集計に使う日付で、日本時間では毎日午前3:00を境に前日と当日が切り替わります（午前0:00〜2:59は前日扱い）。`;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10 text-nokori-text">
