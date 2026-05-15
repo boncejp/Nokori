@@ -4,7 +4,7 @@ import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { fetchUserWelcomeByUserId } from "@/lib/supabase/user-welcome";
 import type { Database } from "@/lib/types/database";
 
-export type PostAuthLandingPath = "/dashboard" | "/welcome" | "/onboarding";
+export type PostAuthLandingPath = "/dashboard" | "/welcome" | "/onboarding" | "/start";
 
 /**
  * テスト用: DB 取得結果が既に分かっているときの純粋な遷移先（フラグの組み合わせのみ）。
@@ -12,9 +12,10 @@ export type PostAuthLandingPath = "/dashboard" | "/welcome" | "/onboarding";
 export function resolvePostAuthLandingFromFlags(flags: {
   readonly hasProfile: boolean;
   readonly welcomeRecordPresent: boolean;
+  readonly startConceptCompleted: boolean;
 }): PostAuthLandingPath {
   if (flags.hasProfile) {
-    return "/dashboard";
+    return flags.startConceptCompleted ? "/dashboard" : "/start";
   }
   if (flags.welcomeRecordPresent) {
     return "/onboarding";
@@ -23,7 +24,7 @@ export function resolvePostAuthLandingFromFlags(flags: {
 }
 
 /**
- * ログイン後のホーム相当で、プロフィール有無とウェルカム完了で遷移先を決める。
+ * ログイン後のホーム相当で、プロフィール有無・ウェルカム完了・コンセプト画面完了で遷移先を決める。
  * `user_welcome` の読み取りに失敗した場合はウェルカムへ寄せる（初回導線を優先）。
  */
 export async function resolvePostAuthLandingPath(
@@ -32,7 +33,12 @@ export async function resolvePostAuthLandingPath(
 ): Promise<PostAuthLandingPath> {
   const profileResult = await fetchProfileByUserId(supabase, userId);
   if (profileResult.success) {
-    return "/dashboard";
+    const completed = profileResult.data.start_concept_completed_at !== null;
+    return resolvePostAuthLandingFromFlags({
+      hasProfile: true,
+      welcomeRecordPresent: false,
+      startConceptCompleted: completed,
+    });
   }
 
   const welcomeResult = await fetchUserWelcomeByUserId(supabase, userId);
@@ -43,5 +49,6 @@ export async function resolvePostAuthLandingPath(
   return resolvePostAuthLandingFromFlags({
     hasProfile: false,
     welcomeRecordPresent: welcomeResult.data !== null,
+    startConceptCompleted: false,
   });
 }

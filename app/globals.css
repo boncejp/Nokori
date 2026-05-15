@@ -118,6 +118,19 @@ body {
   animation: welcome-cta-pop 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.72s both;
 }
 
+/* 初回コンセプト（/start）— welcome と同じキーフレームを流用 */
+.start-concept-fade-in {
+  animation: welcome-fade-up 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.start-concept-pwa {
+  animation: welcome-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+
+.start-concept-cta {
+  animation: welcome-cta-pop 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .welcome-ambient,
   .welcome-panel,
@@ -125,7 +138,10 @@ body {
   .welcome-heading,
   .welcome-line,
   .welcome-actions,
-  .welcome-cta {
+  .welcome-cta,
+  .start-concept-fade-in,
+  .start-concept-pwa,
+  .start-concept-cta {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -141,7 +157,19 @@ body {
       background-color 0.2s ease;
   }
 
+  .start-concept-cta {
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
+  }
+
   .welcome-cta:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -8px rgba(0, 31, 63, 0.35);
+  }
+
+  .start-concept-cta:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 12px 28px -8px rgba(0, 31, 63, 0.35);
   }

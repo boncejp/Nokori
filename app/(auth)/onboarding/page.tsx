@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { OnboardingStepForm } from "@/components/features/OnboardingStepForm";
+import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { fetchUserWelcomeByUserId } from "@/lib/supabase/user-welcome";
@@ -18,7 +19,7 @@ export default async function OnboardingPage() {
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (profileResult.success) {
-    redirect("/dashboard");
+    redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
   const welcomeResult = await fetchUserWelcomeByUserId(supabase, user.id);
@@ -31,7 +32,7 @@ export default async function OnboardingPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">初期設定</h1>
         <p className="text-sm text-nokori-muted">
-          貯金目標と月次の前提を入力します。完了後、ダッシュボードへ移動します。
+          貯金目標と月次の前提を入力します。完了後、使い方の説明へ進みます。
         </p>
         <p className="text-xs leading-relaxed text-nokori-muted">
           本サービスの利用により、

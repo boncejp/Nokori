@@ -168,7 +168,7 @@ export function OnboardingStepForm() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/start");
       router.refresh();
     } catch {
       setErrorMessage("通信に失敗しました。ネットワークを確認して再試行してください。");
@@ -245,7 +245,7 @@ export function OnboardingStepForm() {
             disabled={isSubmitting}
             className="min-h-11 rounded-md bg-nokori-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-nokori-navy-soft disabled:opacity-60"
           >
-            {isSubmitting ? "保存中..." : "保存してダッシュボードへ"}
+            {isSubmitting ? "保存中..." : "保存して次へ"}
           </button>
         ) : (
           <button

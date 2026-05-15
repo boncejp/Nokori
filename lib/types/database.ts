@@ -30,6 +30,7 @@ export type Database = {
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
+          start_concept_completed_at: string | null
           surplus_mode: Database["public"]["Enums"]["surplus_mode"]
           target_amount: number
           target_anchor_logical_date: string
@@ -52,6 +53,7 @@ export type Database = {
           monthly_income: number
           payday: number
           payday_rule: Database["public"]["Enums"]["payday_rule"]
+          start_concept_completed_at?: string | null
           surplus_mode: Database["public"]["Enums"]["surplus_mode"]
           target_amount: number
           target_anchor_logical_date: string
@@ -74,6 +76,7 @@ export type Database = {
           monthly_income?: number
           payday?: number
           payday_rule?: Database["public"]["Enums"]["payday_rule"]
+          start_concept_completed_at?: string | null
           surplus_mode?: Database["public"]["Enums"]["surplus_mode"]
           target_amount?: number
           target_anchor_logical_date?: string

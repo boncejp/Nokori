@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { WelcomeExperience } from "@/components/features/WelcomeExperience";
+import { StartConceptExperience } from "@/components/features/StartConceptExperience";
 import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { fetchUserWelcomeByUserId } from "@/lib/supabase/user-welcome";
 
-export default async function WelcomePage() {
+export default async function StartPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -17,14 +16,13 @@ export default async function WelcomePage() {
   }
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
-  if (profileResult.success) {
+  if (!profileResult.success) {
     redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
-  const welcomeResult = await fetchUserWelcomeByUserId(supabase, user.id);
-  if (welcomeResult.success && welcomeResult.data !== null) {
-    redirect("/onboarding");
+  if (profileResult.data.start_concept_completed_at !== null) {
+    redirect("/dashboard");
   }
 
-  return <WelcomeExperience />;
+  return <StartConceptExperience />;
 }

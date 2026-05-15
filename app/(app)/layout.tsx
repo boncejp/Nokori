@@ -25,6 +25,10 @@ export default async function AppLayout({ children }: AppLayoutProps) {
     redirect(await resolvePostAuthLandingPath(supabase, user.id));
   }
 
+  if (profileResult.data.start_concept_completed_at === null) {
+    redirect("/start");
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <AppBrandHeader />

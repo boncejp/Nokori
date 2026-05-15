@@ -45,6 +45,7 @@
 | `initial_budget` | int | **第1サイクル:** ユーザー入力の「次の給料日まで使う予算」。**通常サイクル:** 月次リセット・給料日モーダル等で更新する内部のサイクル枠（YUTORI 時は繰り越し込みの可処分を表す。設定 PATCH では上書きしない）。 |
 | `last_monthly_reset_logical_date` | date nullable | 直近の月次リセット実行日（冪等性用） |
 | `last_salary_cycle_logical_date` | date nullable | 手取り給料を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
+| `start_concept_completed_at` | timestamptz nullable | 初回コンセプト画面（`/start`）完了時刻。NULL の間はメイン `(app)` へ入場前に同画面へ誘導する |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
 
@@ -132,8 +133,12 @@ MVP の本番は **Vercel を第一選択**とし、必ずしもこの Docker �
 #### 初回ウェルカムと `user_welcome`
 
 - **目的:** プロフィール作成前のユーザーに、**コンセプトのみ**を伝える `/welcome` を一度だけ挟み、「新しいアプリを始める」体験を整える。運用説明やヘルプ本文は本画面では扱わず、従来どおりアプリ内ヘルプ等に任せる。
-- **遷移:** ログイン済みで `profiles` が未作成のとき、`public.user_welcome` に行が**ない**場合は `/welcome` へ。CTA で `POST /api/welcome/complete` が `user_welcome` へ UPSERT（`completed_at`）したあと `/onboarding` へ進む。**行がある**（ウェルカム済み）なら従来どおり `/onboarding` のみ。`profiles` が存在するユーザーは `/welcome` を経由しない。直接 URL を開いた場合のすり抜けは、サーバー側で `/welcome` と `/onboarding` の双方から相互にリダイレクトして防ぐ（無限ループにならないよう、条件は「プロフィール有無」と「`user_welcome` の有無」で排他的に決める）。
+- **遷移:** ログイン済みで `profiles` が未作成のとき、`public.user_welcome` に行が**ない**場合は `/welcome` へ。CTA で `POST /api/welcome/complete` が `user_welcome` へ UPSERT（`completed_at`）したあと `/onboarding` へ進む。**行がある**（ウェルカム済み）なら従来どおり `/onboarding` のみ。`profiles` が存在し**かつ**初回コンセプト（後述の `/start`）も完了済みのユーザーは `/welcome` を経由しない。直接 URL を開いた場合のすり抜けは、サーバー側で `/welcome` と `/onboarding` の双方から相互にリダイレクトして防ぐ（無限ループにならないよう、条件は「プロフィール有無」と「`user_welcome` の有無」で排他的に決める）。
 - **テーブル `public.user_welcome`:** `user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`、`completed_at timestamptz NOT NULL DEFAULT now()`。**未完了は行なし**、完了で INSERT/UPSERT とする。RLS は `user_id = auth.uid()` のみ SELECT/INSERT/UPDATE 可（`profiles` と同様の方針）。
+
+#### 初回コンセプト（`/start`）と `profiles.start_concept_completed_at`
+
+- **位置づけ:** オンボーディング保存直後〜メインの `(app)` ダッシュボードに入る前の**一度きり**の全画面。`/welcome` と同系のトーン（CSS アニメ・`prefers-reduced-motion` 対応）で、サイクル・初回日割り・日々の入力の勧めなど**コンセプト詳細**を短く伝える。完了は `profiles.start_concept_completed_at`（nullable timestamptz）に PATCH 記録し、`(app)/layout.tsx` と `resolvePostAuthLandingPath` で **NULL のあいだは `/dashboard` 等へ入れず `/start` へ寄せる**（直リンク対策）。CTA は `POST /api/start-concept/complete`（冪等な更新）。専用テーブルは設けない（この段階では `profiles` 行が必ず存在するため）。
 
 ### 3.3 Vercel 本番デプロイ（MVP）
 
@@ -354,6 +359,7 @@ function processMonthlyReset(
 
 - **Design:** Apple風ミニマリズム。Navy (#001F3F) 主体。
 - **Welcome（初回のみ）:** ログイン後・オンボーディング前の `/welcome`。プロダクトコンセプトの短いコピーとリッチな（CSS ベースの）入場アニメーション。完了状態は `user_welcome` に永続化し、再ログインでは表示しない。
+- **Start concept（初回のみ）:** オンボーディング完了直後の `/start`。運用イメージ（サイクル・初回日割り・入力の勧め）を少し踏み込んで伝え、完了は `profiles.start_concept_completed_at` に記録する。画面下部に PWA / ホーム画面追加の短い案内を置く（過度なモーダルは避ける）。
 - **Alert UI:** `remainingToday < 0`（今日の残り予算が 0 未満）をトリガーに、**「今日の残り予算」の表示**と短い警告文を赤系で強調する。レイアウト全体を赤系のテーマや背景で覆い替える要件ではない（当該表示に限定。要件定義書 §3.2 と整合）。
 - **Dashboard（初回サイクル）:** 普通支出のみ入力可能。光熱費・特別支出トグルは非表示または無効化。要件定義書に記載の「初回サイクル用説明」テキストを表示。
 - **Dashboard（通常サイクル）:** 普通支出 / 特別支出 / 光熱費のトグルを有効化。

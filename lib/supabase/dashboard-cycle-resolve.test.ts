@@ -75,6 +75,7 @@ function createTestProfile(overrides: Partial<Profile> = {}): Profile {
     initial_budget: 100_000,
     last_monthly_reset_logical_date: null,
     last_salary_cycle_logical_date: null,
+    start_concept_completed_at: null,
     created_at: "2026-05-01T00:00:00+00:00",
     updated_at: "2026-05-01T00:00:00+00:00",
     ...overrides,
