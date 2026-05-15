@@ -394,6 +394,8 @@ function processMonthlyReset(
 
 ## 7. 開発ロードマップ（Cursor指示用）
 
+- **Cursor / エージェント:** ユーザーから明示的な依頼がない限り `git commit` は行わない（コミットは人間が行う）。
+
 | ステップ | 内容 |
 |---|---|
 | 1. Infrastructure | Supabase CLIのセットアップ、SQLマイグレーション初期化、Docker環境構築 |
