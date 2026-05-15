@@ -276,14 +276,14 @@ export function SettingsClient({
           <ReadOnlyField label="現在の貯金総額" value={formatNumberDisplay(formValues.current_total_savings_display)} />
           {showMonthlySavingsQuota && monthlySavingsQuota !== null ? (
             <ReadOnlyField
-              label="月次貯金ノルマ（確定値）"
+              label="月次貯金ノルマ"
               value={formatCurrencyYen(monthlySavingsQuota)}
               helperText="（目標金額 − 現在の貯金総額）÷ 目標日までの残り月数。編集はできません。"
             />
           ) : null}
           {previewContext.isFirstCycle ? null : (
             <NumberField
-              label="月収（手取り概算）"
+              label="月収（手取り）"
               name="monthly_income"
               value={formValues.monthly_income}
               onChange={handleChangeValue}
@@ -355,9 +355,8 @@ export function SettingsClient({
           />
           {yutoriCarryoverDisplayYen !== null ? (
             <ReadOnlyField
-              label="前月からの繰り越し（参考）"
+              label="初回サイクルからの繰り越し"
               value={formatCurrencyYen(yutoriCarryoverDisplayYen)}
-              helperText="直近の給料日リセット後の基準サイクル予算を超えた分（max(0, 保存済み initial_budget − 基準サイクル予算)）。編集はできません。"
             />
           ) : null}
           {previewContext.isFirstCycle ? (

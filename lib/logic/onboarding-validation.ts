@@ -31,6 +31,8 @@ export type ProfileSettingsFormInput = Omit<OnboardingProfileInput, "initial_tot
 export type ProfileSettingsValidationContext = {
   readonly anchorLogicalDateKey: string;
   readonly logicalToday: Date;
+  /** `isWithinFirstCycle` の 27:00 跨ぎ補正用。省略時は補正しない。 */
+  readonly wallClockNow?: Date;
   readonly existingInitialBudget: number;
   /** 初回サイクルでは月収フィールドを出さないため、未送信時はこの値を採用する。 */
   readonly existingMonthlyIncome: number;
@@ -241,6 +243,7 @@ export function validateProfileSettingsPayload(
     referenceDate: context.logicalToday,
     payday: paydayResult.data,
     paydayRule: paydayRuleResult.data,
+    wallClockNow: context.wallClockNow,
   });
 
   let monthlyIncome: number;
@@ -253,12 +256,12 @@ export function validateProfileSettingsPayload(
     if (isMissing) {
       monthlyIncome = context.existingMonthlyIncome;
     } else {
-      const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+      const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り）");
       if (!monthlyIncomeResult.success) return monthlyIncomeResult;
       monthlyIncome = monthlyIncomeResult.data;
     }
   } else {
-    const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+    const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り）");
     if (!monthlyIncomeResult.success) return monthlyIncomeResult;
     monthlyIncome = monthlyIncomeResult.data;
   }

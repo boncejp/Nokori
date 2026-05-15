@@ -73,7 +73,8 @@ export async function POST(request: Request) {
   }
 
   const profile = profileResult.data;
-  const logicalNow = getLogicalDate(new Date());
+  const wallClockNow = new Date();
+  const logicalNow = getLogicalDate(wallClockNow);
   const logicalTodayKey = toJstDateString(logicalNow);
 
   const cycleWindow = calculateCycleWindow({
@@ -123,6 +124,7 @@ export async function POST(request: Request) {
     referenceDate: logicalNow,
     payday: profile.payday,
     paydayRule: profile.payday_rule,
+    wallClockNow,
   });
 
   const updateResult = await updateOwnProfileByUserId(supabase, user.id, {

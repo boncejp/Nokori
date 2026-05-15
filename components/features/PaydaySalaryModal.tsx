@@ -71,7 +71,7 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
           このサイクルの手取り給料
         </h2>
         <p className="mt-2 text-sm text-nokori-muted">
-          給料日の記録として、このサイクルに使う手取り概算を入力してください。予算の基準（月収 − 固定費合計 −
+          給料日の記録として、このサイクルに使う手取りを入力してください。予算の基準（月収 − 固定費合計 −
           光熱費概算 − 月次貯金ノルマ）に反映されます。
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">

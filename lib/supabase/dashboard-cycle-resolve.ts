@@ -215,7 +215,8 @@ export async function resolveDashboardCycle(params: {
   readonly userId: string;
   readonly profile: Profile;
 }): Promise<DashboardCycleResolution> {
-  const logicalToday = getLogicalDate(new Date());
+  const wallClockNow = new Date();
+  const logicalToday = getLogicalDate(wallClockNow);
   const logicalTodayString = toJstDateString(logicalToday);
   const cycleWindow = calculateCycleWindow({
     referenceDate: logicalToday,
@@ -258,6 +259,7 @@ export async function resolveDashboardCycle(params: {
     referenceDate: logicalToday,
     payday: profile.payday,
     paydayRule: profile.payday_rule,
+    wallClockNow,
   });
   const confirmedSpendResult = await calculateConfirmedNormalSpendBeforeToday({
     supabase: params.supabase,
