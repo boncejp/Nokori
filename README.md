@@ -2,7 +2,7 @@
 
 Nokori の初期開発環境です。Next.js App Router + TypeScript をベースに、**アプリのランタイム接続先はクラウド上の Supabase プロジェクトを主**とします（Google OAuth 等の検証の都合）。スキーマはリポジトリの `supabase/migrations` で管理し、**Supabase CLI** でクラウドへ反映したり型を生成したりします。CLI は「ローカル DB を必ず起動する」ためのものではありません。
 
-本番ホスティングは **Vercel を第一選択**と想定しています（デプロイ・OAuth の詳細は `docs/design.md`）。
+本番ホスティングは **Vercel を第一選択**と想定しています（デプロイ・OAuth の詳細は `docs/design.md`）。Vercel では standalone 出力は使わず、コンテナなどでアプリのみ配布する場合は `next.config` の `output: 'standalone'` を検討してください。
 
 ## 前提ツール
 
