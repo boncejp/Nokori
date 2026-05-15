@@ -1,9 +1,7 @@
 import * as holidayJp from "@holiday-jp/holiday_jp";
 import {
   addDays,
-  addMonths,
   differenceInCalendarDays,
-  endOfMonth,
   startOfDay,
   subDays,
 } from "date-fns";
@@ -60,14 +58,16 @@ function createJstDate(year: number, monthIndex: number, dayOfMonth: number): Da
 }
 
 function isHolidayInJapan(date: Date): boolean {
-  // 実行環境のローカルTZに依存しないよう、JSTの年月日に正規化して祝日判定する。
+  // toZonedTime で JST の年月日を取り出し、Date.UTC で再構築する。
+  // createJstDate は fromZonedTime により UTC 値が「前日 15:00Z」になるため、
+  // @holiday-jp/holiday_jp が UTC 値を読み取ると 1 日ずれる。
+  // Date.UTC で作成した Date は getFullYear/getMonth/getDate が JST 値と一致し、
+  // ライブラリが正しい暦日を判定できる。
   const jstDate = toZonedTime(date, TIMEZONE);
-  const normalizedJstDate = createJstDate(
-    jstDate.getFullYear(),
-    jstDate.getMonth(),
-    jstDate.getDate(),
+  const normalizedDate = new Date(
+    Date.UTC(jstDate.getFullYear(), jstDate.getMonth(), jstDate.getDate()),
   );
-  return holidayJp.between(normalizedJstDate, normalizedJstDate).length > 0;
+  return holidayJp.between(normalizedDate, normalizedDate).length > 0;
 }
 
 function isWeekendOrHoliday(date: Date): boolean {
@@ -206,10 +206,11 @@ export function calculateNextPayday(params: {
 
   const jstNow = toZonedTime(fromDate, TIMEZONE);
   const year = jstNow.getFullYear();
-  const month = jstNow.getMonth();
+  const month = jstNow.getMonth(); // 0-indexed JST 月
 
-  const currentMonthEnd = endOfMonth(createJstDate(year, month, 1));
-  const currentMonthLastDay = toZonedTime(currentMonthEnd, TIMEZONE).getDate();
+  // endOfMonth（date-fns）はサーバーのローカル TZ で動作するため使わない。
+  // Date.UTC の day=0（翌月0日目）で月末日を求める（JST は DST なしで安全）。
+  const currentMonthLastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const currentMonthDay = Math.min(payday, currentMonthLastDay);
   const currentMonthBase = createJstDate(year, month, currentMonthDay);
   const currentMonthPayday = adjustPaydayByRule(currentMonthBase, paydayRule);
@@ -220,12 +221,10 @@ export function calculateNextPayday(params: {
     return toJstStartOfDay(currentMonthPayday);
   }
 
-  const nextMonthDate = addMonths(createJstDate(year, month, 1), 1);
-  const nextMonthJst = toZonedTime(nextMonthDate, TIMEZONE);
-  const nextYear = nextMonthJst.getFullYear();
-  const nextMonth = nextMonthJst.getMonth();
-  const nextMonthEnd = endOfMonth(createJstDate(nextYear, nextMonth, 1));
-  const nextMonthLastDay = toZonedTime(nextMonthEnd, TIMEZONE).getDate();
+  // addMonths（date-fns）もサーバーローカル TZ 依存のため使わず直接計算する。
+  const nextYear = month === 11 ? year + 1 : year;
+  const nextMonth = month === 11 ? 0 : month + 1;
+  const nextMonthLastDay = new Date(Date.UTC(nextYear, nextMonth + 1, 0)).getUTCDate();
   const nextMonthDay = Math.min(payday, nextMonthLastDay);
   const nextMonthBase = createJstDate(nextYear, nextMonth, nextMonthDay);
   const nextMonthPayday = adjustPaydayByRule(nextMonthBase, paydayRule);
@@ -552,15 +551,19 @@ function calculatePaydayInMonth(params: {
 }): Date {
   const { referenceDate, payday, paydayRule, monthOffset } = params;
   const jstReferenceDate = toZonedTime(referenceDate, TIMEZONE);
-  const monthReference = addMonths(
-    createJstDate(jstReferenceDate.getFullYear(), jstReferenceDate.getMonth(), 1),
-    monthOffset,
-  );
-  const targetMonth = toZonedTime(monthReference, TIMEZONE);
-  const monthEnd = endOfMonth(createJstDate(targetMonth.getFullYear(), targetMonth.getMonth(), 1));
-  const monthLastDay = toZonedTime(monthEnd, TIMEZONE).getDate();
+
+  // addMonths（date-fns）はサーバーのローカル TZ で動作するため使わない。
+  // JST の年月インデックスに monthOffset を直接加算してオーバーフローを補正する。
+  let targetYear = jstReferenceDate.getFullYear();
+  let targetMonthIdx = jstReferenceDate.getMonth() + monthOffset; // 0-indexed
+  while (targetMonthIdx < 0)  { targetMonthIdx += 12; targetYear -= 1; }
+  while (targetMonthIdx > 11) { targetMonthIdx -= 12; targetYear += 1; }
+
+  // endOfMonth（date-fns）も同様にサーバーローカル TZ 依存のため使わない。
+  // Date.UTC の day=0（翌月0日目）で月末日を求める（JST は DST なしで安全）。
+  const monthLastDay = new Date(Date.UTC(targetYear, targetMonthIdx + 1, 0)).getUTCDate();
   const resolvedPayday = Math.min(payday, monthLastDay);
-  const basePayday = createJstDate(targetMonth.getFullYear(), targetMonth.getMonth(), resolvedPayday);
+  const basePayday = createJstDate(targetYear, targetMonthIdx, resolvedPayday);
 
   return adjustPaydayByRule(basePayday, paydayRule);
 }
@@ -580,9 +583,16 @@ export function calculateTargetDateFromDuration(params: {
     throw new Error(`durationMonths must be at least 1: ${durationMonths}`);
   }
 
-  const targetMonthReference = addMonths(anchorLogicalDate, durationMonths);
+  // addMonths（date-fns）はサーバーのローカル TZ で動作するため使わない。
+  // アンカーの JST 年月に durationMonths を直接加算し、その月の中間日（15日）を
+  // referenceDate に使う。月の15日は +9h でも月を跨がないため toZonedTime が正確。
+  const anchorJst = toZonedTime(anchorLogicalDate, TIMEZONE);
+  let targetYear = anchorJst.getFullYear();
+  let targetMonthIdx = anchorJst.getMonth() + durationMonths; // 0-indexed
+  while (targetMonthIdx > 11) { targetMonthIdx -= 12; targetYear += 1; }
+
   return calculatePaydayInMonth({
-    referenceDate: targetMonthReference,
+    referenceDate: new Date(Date.UTC(targetYear, targetMonthIdx, 15)),
     payday,
     paydayRule,
     monthOffset: 0,

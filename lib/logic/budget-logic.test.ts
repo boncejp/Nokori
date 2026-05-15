@@ -963,3 +963,131 @@ describe("isFirstCycleInitialBudgetExceedingTotalAssets", () => {
     ).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// タイムゾーン（UTC サーバー）リグレッションテスト
+//
+// Vercel 本番は UTC で動作する。date-fns の endOfMonth / addMonths は
+// サーバーローカル TZ に依存するため、UTC 環境では月末日計算や月送りが
+// ずれて給料日・サイクル判定が壊れる。
+// 以下のテストは UTC 相当の Date 値（".000Z" 形式）を明示的に渡すことで、
+// 修正が正しく機能することを保証するリグレッションスイートである。
+// ─────────────────────────────────────────────────────────────────────
+describe("タイムゾーン UTC リグレッション", () => {
+  // ユーザー実環境：payday=25、BEFORE、anchor=2026-05-15
+  // Vercel での onboarding 完了時刻相当（JST 14:50 = UTC 05:50）
+  const utcOnboardingTimestamp = new Date("2026-05-15T05:50:00Z");
+  const anchor = parseJstDateKeyToDate("2026-05-15");
+
+  describe("calculateNextPayday — UTC タイムスタンプを渡しても正しい給料日を返す", () => {
+    it("payday=25 BEFORE: 2026年5月は月曜で平日なので 5/25 そのまま", () => {
+      // 5月25日は月曜（2026-01-01=木+144日%7=+4=月）→ 前倒し不要
+      const result = calculateNextPayday({
+        fromDate: utcOnboardingTimestamp,
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(formatJstDate(result)).toBe("2026-05-25");
+    });
+
+    it("payday=25 BEFORE: 4月25日は土曜なので前倒しで 4/24（金）", () => {
+      // 2026年4月25日は土曜 → BEFORE → 4月24日（金・祝日でない）
+      const result = calculateNextPayday({
+        fromDate: new Date("2026-04-01T05:50:00Z"),
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(formatJstDate(result)).toBe("2026-04-24");
+    });
+
+    it("月末が 2 月: payday=31 を月末日（28日）に補正する（UTC タイムスタンプ）", () => {
+      const result = calculateNextPayday({
+        fromDate: new Date("2026-02-01T00:30:00Z"), // JST 09:30
+        payday: 31,
+        paydayRule: "FIXED",
+      });
+      expect(formatJstDate(result)).toBe("2026-02-28");
+    });
+  });
+
+  describe("calculateTargetDateFromDuration — UTC 環境でも目標日が正しく計算される", () => {
+    it("anchor=2026-05-15、12ヶ月後の給料日は 2027-05-25（火・祝日なし→補正なし）", () => {
+      // 修正前バグ: monthLastDay=1 → payday=1 → 5/1(土) → BEFORE で4/30を「昭和の日」
+      // と誤判定 → 4/29 という誤った値が返っていた
+      const result = calculateTargetDateFromDuration({
+        anchorLogicalDate: anchor,
+        durationMonths: 12,
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(formatJstDate(result)).toBe("2027-05-25");
+    });
+
+    it("anchor=2026-05-15、1ヶ月後の給料日は 2026-06-25（木・祝日なし→補正なし）", () => {
+      const result = calculateTargetDateFromDuration({
+        anchorLogicalDate: anchor,
+        durationMonths: 1,
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(formatJstDate(result)).toBe("2026-06-25");
+    });
+  });
+
+  describe("isWithinFirstCycle — UTC タイムスタンプで初回サイクル判定が正しく動く", () => {
+    it("オンボーディング完了の UTC 日時（JST 14:50）は初回サイクル内", () => {
+      // 修正前バグ: firstCycleEnd が「4月30日」になり anchor(5/15) より過去のため
+      // isWithinFirstCycle が false を返していた
+      const result = isWithinFirstCycle({
+        anchorLogicalDate: anchor,
+        referenceDate: utcOnboardingTimestamp,
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(result).toBe(true);
+    });
+
+    it("初回サイクル中盤（5月20日 UTC 相当）も初回サイクル内", () => {
+      const result = isWithinFirstCycle({
+        anchorLogicalDate: anchor,
+        referenceDate: new Date("2026-05-20T05:50:00Z"),
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(result).toBe(true);
+    });
+
+    it("初回サイクル最終日（5月24日）は初回サイクル内", () => {
+      const result = isWithinFirstCycle({
+        anchorLogicalDate: anchor,
+        referenceDate: new Date("2026-05-24T05:50:00Z"),
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(result).toBe(true);
+    });
+
+    it("最初の給料日当日（5月25日）は初回サイクル外", () => {
+      const result = isWithinFirstCycle({
+        anchorLogicalDate: anchor,
+        referenceDate: new Date("2026-05-25T05:50:00Z"),
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("calculateCycleWindow — UTC 環境でサイクル開始日・次の給料日が正しく返る", () => {
+    it("5月15日（給料日前）のサイクルは 4/24 開始・次の給料日 5/25", () => {
+      // 修正前バグ: cycleStart = 5/1、nextPayday = 5/1（同日）→ 履歴範囲が逆転
+      const result = calculateCycleWindow({
+        referenceDate: utcOnboardingTimestamp,
+        payday: 25,
+        paydayRule: "BEFORE",
+      });
+      expect(formatJstDate(result.cycleStartDate)).toBe("2026-04-24");
+      expect(formatJstDate(result.nextPaydayDate)).toBe("2026-05-25");
+    });
+  });
+});
