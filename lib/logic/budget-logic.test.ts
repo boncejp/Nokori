@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   applyUtilityDeltaToRemainingBudget,
   calculateBaseCycleBudget,
@@ -16,7 +16,6 @@ import {
   calculateRemainingToday,
   calculateUtilityBudgetDelta,
   calculateYutoriCarryoverDisplay,
-  getFirstCycleEndLogicalDate,
   getHistoryListingLogicalDateRange,
   getLogicalDate,
   isFirstCycleInitialBudgetExceedingTotalAssets,
@@ -196,28 +195,6 @@ describe("calculateFirstCycleDailyProrationDayCounts", () => {
     expect(metrics.futureDailyBudget).toBeCloseTo(20_000 / 30, 10);
     expect(metrics.dailyBudgetToday).not.toBeCloseTo(20_000 / 32, 10);
     expect(metrics.futureDailyBudget).not.toBeCloseTo(20_000 / 31, 10);
-  });
-
-  it("論理日がアンカーより前のときは日割りの起点をアンカーに合わせる（27:00 未明）", () => {
-    const anchor = parseJstDateKeyToDate("2026-05-15");
-    const logicalBeforeAnchor = parseJstDateKeyToDate("2026-05-14");
-    const logicalOnAnchor = parseJstDateKeyToDate("2026-05-15");
-    const countsBefore = calculateFirstCycleDailyProrationDayCounts({
-      logicalToday: logicalBeforeAnchor,
-      anchorLogicalDate: anchor,
-      payday: 25,
-      paydayRule: "BEFORE",
-    });
-    const countsOn = calculateFirstCycleDailyProrationDayCounts({
-      logicalToday: logicalOnAnchor,
-      anchorLogicalDate: anchor,
-      payday: 25,
-      paydayRule: "BEFORE",
-    });
-    expect(countsBefore.daysIncludingToday).toBe(countsOn.daysIncludingToday);
-    expect(countsBefore.daysExcludingToday).toBe(countsOn.daysExcludingToday);
-    expect(countsOn.daysIncludingToday).toBe(10);
-    expect(countsOn.daysExcludingToday).toBe(9);
   });
 });
 
@@ -719,18 +696,6 @@ describe("getHistoryListingLogicalDateRange", () => {
     expect(formatJstDate(result.from)).toBe("2026-04-25");
     expect(formatJstDate(result.to)).toBe("2026-05-24");
   });
-
-  it("通常分岐では常に JST 暦日キーで from <= to", () => {
-    const anchor = parseJstDateKeyToDate("2026-05-15");
-    const range = getHistoryListingLogicalDateRange({
-      logicalToday: new Date("2026-05-20T12:00:00+09:00"),
-      anchorLogicalDate: anchor,
-      payday: 25,
-      paydayRule: "BEFORE",
-      isFirstCycle: false,
-    });
-    expect(toJstDateString(range.from) <= toJstDateString(range.to)).toBe(true);
-  });
 });
 
 describe("isWithinFirstCycle", () => {
@@ -814,101 +779,6 @@ describe("isWithinFirstCycle", () => {
     });
 
     expect(result).toBe(false);
-  });
-});
-
-describe("初回サイクル判定（27:00 未明とアンカー暦日）", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  const anchorKey = "2026-05-15";
-  const payday = 25;
-  const paydayRule = "BEFORE" as const;
-
-  it("JST 15日昼: 論理日がアンカー同日で初回・初回終了日・履歴範囲が期待どおり", () => {
-    vi.setSystemTime(new Date("2026-05-15T03:30:00.000Z"));
-    const now = new Date();
-    const logical = getLogicalDate(now);
-    const anchor = parseJstDateKeyToDate(anchorKey);
-    expect(toJstDateString(logical)).toBe(anchorKey);
-    expect(
-      isWithinFirstCycle({
-        anchorLogicalDate: anchor,
-        referenceDate: logical,
-        payday,
-        paydayRule,
-        wallClockNow: now,
-      }),
-    ).toBe(true);
-    const end = getFirstCycleEndLogicalDate({ anchorLogicalDate: anchor, payday, paydayRule });
-    expect(toJstDateString(end)).toBe("2026-05-24");
-    const range = getHistoryListingLogicalDateRange({
-      logicalToday: logical,
-      anchorLogicalDate: anchor,
-      payday,
-      paydayRule,
-      isFirstCycle: true,
-    });
-    expect(toJstDateString(range.from)).toBe(anchorKey);
-    expect(toJstDateString(range.to)).toBe("2026-05-24");
-    expect(toJstDateString(range.from) <= toJstDateString(range.to)).toBe(true);
-  });
-
-  it("JST 15日未明（0–2時台）: 論理日キーは前日だが wallClock 指定で初回内", () => {
-    vi.setSystemTime(new Date("2026-05-14T16:30:00.000Z"));
-    const now = new Date();
-    const logical = getLogicalDate(now);
-    expect(toJstDateString(logical)).toBe("2026-05-14");
-    expect(
-      isWithinFirstCycle({
-        anchorLogicalDate: parseJstDateKeyToDate(anchorKey),
-        referenceDate: logical,
-        payday,
-        paydayRule,
-        wallClockNow: now,
-      }),
-    ).toBe(true);
-  });
-
-  it("JST 15日未明で wallClock 未指定のときは初回外（互換・締め処理など論理日のみの呼び出し用）", () => {
-    vi.setSystemTime(new Date("2026-05-14T16:30:00.000Z"));
-    const now = new Date();
-    const logical = getLogicalDate(now);
-    expect(
-      isWithinFirstCycle({
-        anchorLogicalDate: parseJstDateKeyToDate(anchorKey),
-        referenceDate: logical,
-        payday,
-        paydayRule,
-      }),
-    ).toBe(false);
-  });
-
-  it("未明でも初回と判定されたとき履歴範囲の from/to が逆転しない", () => {
-    vi.setSystemTime(new Date("2026-05-14T16:30:00.000Z"));
-    const now = new Date();
-    const logical = getLogicalDate(now);
-    const anchor = parseJstDateKeyToDate(anchorKey);
-    const inFirst = isWithinFirstCycle({
-      anchorLogicalDate: anchor,
-      referenceDate: logical,
-      payday,
-      paydayRule,
-      wallClockNow: now,
-    });
-    expect(inFirst).toBe(true);
-    const range = getHistoryListingLogicalDateRange({
-      logicalToday: logical,
-      anchorLogicalDate: anchor,
-      payday,
-      paydayRule,
-      isFirstCycle: inFirst,
-    });
-    expect(toJstDateString(range.from) <= toJstDateString(range.to)).toBe(true);
   });
 });
 

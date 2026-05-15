@@ -620,7 +620,6 @@ export function getFirstCycleEndLogicalDate(params: {
 /**
  * 初回サイクル中の日次予算の分母に使う残り日数。
  * 終端は `getFirstCycleEndLogicalDate` と同一（次の給料日当日は含めず、前日まで）。
- * 論理日がアンカー開始より前（例: アンカー暦日の 27:00 未明で論理日のみ前日）のときは、分母の起点をアンカー暦日に揃える。
  */
 export function calculateFirstCycleDailyProrationDayCounts(params: {
   readonly logicalToday: Date;
@@ -636,11 +635,7 @@ export function calculateFirstCycleDailyProrationDayCounts(params: {
     payday: params.payday,
     paydayRule: params.paydayRule,
   });
-  const anchorJstStart = startOfDay(toZonedTime(params.anchorLogicalDate, TIMEZONE));
-  let todayJstStart = startOfDay(toZonedTime(params.logicalToday, TIMEZONE));
-  if (todayJstStart < anchorJstStart) {
-    todayJstStart = anchorJstStart;
-  }
+  const todayJstStart = startOfDay(toZonedTime(params.logicalToday, TIMEZONE));
   const endJstStart = startOfDay(toZonedTime(firstCycleEnd, TIMEZONE));
   const diff = differenceInCalendarDays(endJstStart, todayJstStart);
   if (diff < 0) {
@@ -691,48 +686,20 @@ export function calculateNormalCycleDailyProrationDayCounts(params: {
 /**
  * 初回サイクル中かどうかを判定する。
  * 初回サイクル = target_anchor_logical_date（論理日）から最初の給料日前日まで。
- *
- * 27:00 ルールで `getLogicalDate` がアンカー暦日の「前日」キーになる時間帯（JST 0:00〜2:59）でも、
- * アンカー暦日当日の未明は初回サイクルに含める（`wallClockNow` を渡したときのみ補正する）。
- * 月次リセットの締め境界など、`referenceDate` が論理「今日」以外のときは `wallClockNow` を渡さない。
  */
 export function isWithinFirstCycle(params: {
   readonly anchorLogicalDate: Date;
   readonly referenceDate: Date;
   readonly payday: number;
   readonly paydayRule: PaydayRule;
-  readonly wallClockNow?: Date;
 }): boolean {
-  const { anchorLogicalDate, referenceDate, payday, paydayRule, wallClockNow } = params;
+  const { anchorLogicalDate, referenceDate, payday, paydayRule } = params;
   const anchorString = toJstDateString(anchorLogicalDate);
   const firstCycleEndDate = getFirstCycleEndLogicalDate({ anchorLogicalDate, payday, paydayRule });
   const referenceDateString = toJstDateString(referenceDate);
   const firstCycleEndDateString = toJstDateString(firstCycleEndDate);
 
-  if (referenceDateString > firstCycleEndDateString) {
-    return false;
-  }
-  if (referenceDateString >= anchorString) {
-    return true;
-  }
-
-  if (wallClockNow === undefined) {
-    return false;
-  }
-
-  const anchorMinus1Key = toJstDateString(subDays(parseJstDateKeyToDate(anchorString), 1));
-  if (referenceDateString !== anchorMinus1Key) {
-    return false;
-  }
-
-  const jstWall = toZonedTime(wallClockNow, TIMEZONE);
-  if (toJstDateString(wallClockNow) !== anchorString) {
-    return false;
-  }
-  if (jstWall.getHours() >= RESET_HOUR) {
-    return false;
-  }
-  return true;
+  return referenceDateString >= anchorString && referenceDateString <= firstCycleEndDateString;
 }
 
 /**
@@ -762,16 +729,10 @@ export function getHistoryListingLogicalDateRange(params: {
     payday: params.payday,
     paydayRule: params.paydayRule,
   });
-  const from = window.cycleStartDate;
-  const to = getNormalCycleListingEndLogicalDate(window.nextPaydayDate);
-  const fromKey = toJstDateString(from);
-  const toKey = toJstDateString(to);
-  if (fromKey > toKey) {
-    throw new Error(
-      `[getHistoryListingLogicalDateRange] normal branch from/to inversion from=${fromKey} to=${toKey} logicalToday=${toJstDateString(params.logicalToday)} payday=${params.payday}`,
-    );
-  }
-  return { from, to };
+  return {
+    from: window.cycleStartDate,
+    to: getNormalCycleListingEndLogicalDate(window.nextPaydayDate),
+  };
 }
 
 /**

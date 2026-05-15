@@ -38,12 +38,10 @@ export async function PATCH(request: Request) {
 
   const anchorLogicalDateKey = profileResult.data.target_anchor_logical_date;
   const anchorLogicalDate = parseJstDateKeyToDate(anchorLogicalDateKey);
-  const wallClockNow = new Date();
-  const logicalNow = getLogicalDate(wallClockNow);
+  const logicalNow = getLogicalDate(new Date());
   const validationResult = validateProfileSettingsPayload(rawBody, {
     anchorLogicalDateKey: profileResult.data.target_anchor_logical_date,
     logicalToday: logicalNow,
-    wallClockNow,
     existingInitialBudget: profileResult.data.initial_budget,
     existingMonthlyIncome: profileResult.data.monthly_income,
   });
@@ -56,7 +54,6 @@ export async function PATCH(request: Request) {
     referenceDate: logicalNow,
     payday: validationResult.data.payday,
     paydayRule: validationResult.data.payday_rule,
-    wallClockNow,
   });
   if (
     isFirstCycleInitialBudgetExceedingTotalAssets({

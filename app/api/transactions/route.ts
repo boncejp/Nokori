@@ -37,14 +37,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const wallClockNow = new Date();
-  const logicalNow = getLogicalDate(wallClockNow);
+  const logicalNow = getLogicalDate(new Date());
   const inFirstCycle = isWithinFirstCycle({
     anchorLogicalDate: parseJstDateKeyToDate(profileResult.data.target_anchor_logical_date),
     referenceDate: logicalNow,
     payday: profileResult.data.payday,
     paydayRule: profileResult.data.payday_rule,
-    wallClockNow,
   });
 
   const persistencePlan = createTransactionPersistencePlan({

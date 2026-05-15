@@ -38,8 +38,7 @@ export default async function SettingsPage() {
   });
 
   const profile = cycleResolution.success ? cycleResolution.data.profile : profileResult.data;
-  const wallClockNow = new Date();
-  const logicalNow = getLogicalDate(wallClockNow);
+  const logicalNow = getLogicalDate(new Date());
   const anchorLogicalDate = parseJstDateKeyToDate(profile.target_anchor_logical_date);
   const isFirstCycle = cycleResolution.success
     ? cycleResolution.data.isFirstCycle
@@ -48,7 +47,6 @@ export default async function SettingsPage() {
         referenceDate: logicalNow,
         payday: profile.payday,
         paydayRule: profile.payday_rule,
-        wallClockNow,
       });
 
   let previewSnapshot = null;
