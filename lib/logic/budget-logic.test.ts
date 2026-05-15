@@ -27,6 +27,8 @@ import {
   resolveInitialBudgetForSettingsUpdate,
   shouldExecuteMonthlyReset,
   sumPlainNormalExpenseAmounts,
+  toJstStartOfDay,
+  toJstDateString,
 } from "./budget-logic";
 import { calculateDashboardCycleMetrics } from "./dashboard-cycle-metrics";
 
@@ -275,6 +277,39 @@ describe("calculateNormalCycleDailyProrationDayCounts", () => {
     expect(metrics.futureDailyBudget).toBeCloseTo(39_000 / 9, 10);
     expect(metrics.dailyBudgetToday).not.toBeCloseTo(39_000 / 11, 10);
     expect(metrics.futureDailyBudget).not.toBeCloseTo(39_000 / 10, 10);
+  });
+
+  it("UTC インスタントが暦日とずれても JST キーで履歴終端と一致し、サイクル最終日の分母が壊れない（本番 500 再現系）", () => {
+    const nextPayday = new Date("2026-05-25T00:00:00+09:00");
+    // JST 2026-05-24 だが UTC では 2026-05-24 00:00（旧実装の startOfDay+toZonedTime が 1 日ずれうる）
+    const logicalToday = new Date("2026-05-24T00:00:00.000Z");
+    expect(toJstDateString(logicalToday)).toBe("2026-05-24");
+
+    const range = getHistoryListingLogicalDateRange({
+      logicalToday,
+      anchorLogicalDate: parseJstDateKeyToDate("2026-04-10"),
+      payday: 25,
+      paydayRule: "FIXED",
+      isFirstCycle: false,
+    });
+    expect(toJstDateString(range.to)).toBe("2026-05-24");
+
+    const counts = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: nextPayday,
+    });
+    expect(counts.daysIncludingToday).toBe(1);
+    expect(counts.daysExcludingToday).toBe(0);
+  });
+
+  it("論理日キーがサイクル終端より後ろでも throw せず分母をクランプする", () => {
+    const logicalToday = parseJstDateKeyToDate("2026-05-24");
+    const nextPayday = toJstStartOfDay(parseJstDateKeyToDate("2026-05-21"));
+    const counts = calculateNormalCycleDailyProrationDayCounts({
+      logicalToday,
+      nextPaydayDate: nextPayday,
+    });
+    expect(counts).toEqual({ daysIncludingToday: 1, daysExcludingToday: 0 });
   });
 });
 

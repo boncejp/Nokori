@@ -38,6 +38,21 @@ export function parseJstDateKeyToDate(dateKey: string): Date {
   return new Date(`${dateKey}T00:00:00+09:00`);
 }
 
+/** 暦日キー同士の差（to − from）を日単位で返す。日本は DST なしのため ms/日 で十分。 */
+function differenceJstCalendarDaysBetweenKeys(fromKey: string, toKey: string): number {
+  const fromMs = parseJstDateKeyToDate(fromKey).getTime();
+  const toMs = parseJstDateKeyToDate(toKey).getTime();
+  return Math.round((toMs - fromMs) / 86_400_000);
+}
+
+/**
+ * 通常サイクル履歴一覧の終端（次の給料日前日）の論理日。
+ * `getHistoryListingLogicalDateRange` 通常分岐の `to` と同一式（`subDays(nextPayday, 1)` を JST 暦日起点に正規化）。
+ */
+function getNormalCycleListingEndLogicalDate(nextPaydayDate: Date): Date {
+  return toJstStartOfDay(subDays(nextPaydayDate, 1));
+}
+
 function createJstDate(year: number, monthIndex: number, dayOfMonth: number): Date {
   const month = String(monthIndex + 1).padStart(2, "0");
   const day = String(dayOfMonth).padStart(2, "0");
@@ -634,8 +649,9 @@ export function calculateFirstCycleDailyProrationDayCounts(params: {
 
 /**
  * 通常サイクル中の日次予算の分母に使う残り日数。
- * 終端は `getHistoryListingLogicalDateRange` の通常分岐の `to`
- *（`subDays(calculateCycleWindow(...).nextPaydayDate, 1)`）と同一。
+ * 終端は `getNormalCycleListingEndLogicalDate`（= `getHistoryListingLogicalDateRange` 通常分岐の `to`）と同一。
+ * 分子の残り日数は **JST 暦日キー**（`toJstDateString`）同士の差で求め、
+ * `differenceInCalendarDays(startOfDay(toZonedTime(...)))` のようにサーバー TZ（例: Vercel の UTC）に依存させない。
  */
 export function calculateNormalCycleDailyProrationDayCounts(params: {
   readonly logicalToday: Date;
@@ -644,12 +660,22 @@ export function calculateNormalCycleDailyProrationDayCounts(params: {
   readonly daysIncludingToday: number;
   readonly daysExcludingToday: number;
 } {
-  const cycleEndLogicalDate = toJstStartOfDay(subDays(params.nextPaydayDate, 1));
-  const todayJstStart = startOfDay(toZonedTime(params.logicalToday, TIMEZONE));
-  const endJstStart = startOfDay(toZonedTime(cycleEndLogicalDate, TIMEZONE));
-  const diff = differenceInCalendarDays(endJstStart, todayJstStart);
+  const cycleEndLogicalDate = getNormalCycleListingEndLogicalDate(params.nextPaydayDate);
+  const todayKey = toJstDateString(params.logicalToday);
+  const cycleEndKey = toJstDateString(cycleEndLogicalDate);
+  let diff = differenceJstCalendarDaysBetweenKeys(todayKey, cycleEndKey);
   if (diff < 0) {
-    throw new Error("logicalToday must not be after cycle end (day before next payday)");
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[calculateNormalCycleDailyProrationDayCounts] logical today is after cycle end JST key; clamping denominators",
+        {
+          todayKey,
+          cycleEndKey,
+          nextPaydayKey: toJstDateString(params.nextPaydayDate),
+        },
+      );
+    }
+    diff = 0;
   }
   return {
     daysIncludingToday: diff + 1,
@@ -705,7 +731,7 @@ export function getHistoryListingLogicalDateRange(params: {
   });
   return {
     from: window.cycleStartDate,
-    to: toJstStartOfDay(subDays(window.nextPaydayDate, 1)),
+    to: getNormalCycleListingEndLogicalDate(window.nextPaydayDate),
   };
 }
 
