@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 
 import {
-  calculateBaseCycleBudget,
   calculateCycleWindow,
-  calculateMonthlySavingsQuota,
   getLogicalDate,
-  isWithinFirstCycle,
-  parseJstDateKeyToDate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
 import { fetchProfileByUserId, updateOwnProfileByUserId } from "@/lib/supabase/profiles";
@@ -91,44 +87,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ errorMessage: "サイクル開始日が一致しません。画面を再読み込みしてください。" }, { status: 400 });
   }
 
-  const targetDate = new Date(`${profile.target_date}T00:00:00+09:00`);
-  const quotaParams = {
-    targetAmount: profile.target_amount,
-    currentTotalSavings: profile.current_total_savings,
-    targetDate,
-    referenceDate: logicalNow,
-  };
-
-  const monthlySavingsQuota = calculateMonthlySavingsQuota(quotaParams);
-  const oldBase = calculateBaseCycleBudget({
-    monthlyIncome: profile.monthly_income,
-    fixedCosts: profile.fixed_costs,
-    estimatedElectricity: profile.estimated_electricity,
-    estimatedGas: profile.estimated_gas,
-    estimatedWater: profile.estimated_water,
-    monthlySavingsQuota,
-  });
-  const newBase = calculateBaseCycleBudget({
-    monthlyIncome: validationResult.data.monthlyIncome,
-    fixedCosts: profile.fixed_costs,
-    estimatedElectricity: profile.estimated_electricity,
-    estimatedGas: profile.estimated_gas,
-    estimatedWater: profile.estimated_water,
-    monthlySavingsQuota,
-  });
-  const deltaBase = newBase - oldBase;
-
-  const firstCycle = isWithinFirstCycle({
-    anchorLogicalDate: parseJstDateKeyToDate(profile.target_anchor_logical_date),
-    referenceDate: logicalNow,
-    payday: profile.payday,
-    paydayRule: profile.payday_rule,
-  });
-
   const updateResult = await updateOwnProfileByUserId(supabase, user.id, {
     monthly_income: validationResult.data.monthlyIncome,
     last_salary_cycle_logical_date: validationResult.data.cycleStartLogicalDate,
-    ...(firstCycle ? {} : { initial_budget: profile.initial_budget + deltaBase }),
   });
 
   if (!updateResult.success) {

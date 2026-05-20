@@ -18,8 +18,10 @@ export type SettingsPreviewSnapshotSlice = {
   readonly confirmedNormalSpentBeforeToday: number;
   readonly todayTransactions: readonly DashboardPreviewTransaction[];
   readonly utilityEstimatesDb: UtilityEstimateMap;
-  /** 通常サイクル: 保存済み `initial_budget`（YUTORI の繰り越し反映後）。プレビューは編集草案ではなく DB 値を母数にする。 */
+  /** 初回サイクル: initial_budget（オンボーディング入力値）。プレビューでも初回は initialBudget を使う。 */
   readonly initialBudgetDb: number;
+  /** 通常サイクル YUTORI: 前サイクルから繰り越した額。プレビューは baseCycleBudget + yutoriCarryoverDb を母数にする。 */
+  readonly yutoriCarryoverDb: number;
 };
 
 export type SettingsBudgetPreviewDraft = {
@@ -160,6 +162,7 @@ export function calculateSettingsBudgetPreview(params: {
     isFirstCycle: false,
     surplusMode: draft.surplusMode,
     initialBudget: snapshot.initialBudgetDb,
+    yutoriCarryover: snapshot.yutoriCarryoverDb,
     baseCycleBudget,
     confirmedNormalSpentBeforeToday: snapshot.confirmedNormalSpentBeforeToday,
   });

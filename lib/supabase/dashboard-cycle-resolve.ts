@@ -142,7 +142,7 @@ async function executeMonthlyReset(params: {
   });
 
   let nextTotalSavings: number;
-  let nextInitialBudget: number;
+  let nextYutoriCarryover: number;
 
   if (closingFirstCycle) {
     const sumPlainNormal = sumPlainNormalExpenseAmounts(previousCycleTransactionsResult.data);
@@ -150,10 +150,9 @@ async function executeMonthlyReset(params: {
       currentTotalSavings: params.profile.current_total_savings,
       initialBudget: params.profile.initial_budget,
       sumPlainNormalSpentInFirstCycle: sumPlainNormal,
-      baseCycleBudget,
     });
     nextTotalSavings = firstClose.nextTotalSavings;
-    nextInitialBudget = firstClose.nextInitialBudget;
+    nextYutoriCarryover = firstClose.nextYutoriCarryover;
   } else {
     const previousCycleConfirmedSpend = calculateConfirmedNormalSpentWithUtilityAdjustment(
       previousCycleTransactionsResult.data,
@@ -163,22 +162,26 @@ async function executeMonthlyReset(params: {
         WATER: params.profile.estimated_water,
       },
     );
-    const surplus = params.profile.initial_budget - previousCycleConfirmedSpend;
+    // 前サイクルの有効予算（YUTORI は繰り越し込み）と確定支出の差が余剰金
+    const previousCycleEffectiveBudget =
+      params.profile.surplus_mode === "YUTORI"
+        ? baseCycleBudget + params.profile.yutori_carryover
+        : baseCycleBudget;
+    const surplus = previousCycleEffectiveBudget - previousCycleConfirmedSpend;
     const monthlyResetResult = processMonthlyReset({
       surplusMode: params.profile.surplus_mode,
       currentTotalSavings: params.profile.current_total_savings,
-      baseBudget: baseCycleBudget,
       surplus,
     });
     nextTotalSavings = monthlyResetResult.nextTotalSavings;
-    nextInitialBudget = monthlyResetResult.nextInitialBudget;
+    nextYutoriCarryover = monthlyResetResult.nextYutoriCarryover;
   }
 
   const updatedProfileResult = await applyMonthlyResetForLogicalDate(params.supabase, {
     userId: params.userId,
     logicalDate: params.logicalTodayString,
     nextTotalSavings,
-    nextInitialBudget,
+    nextYutoriCarryover,
   });
 
   if (!updatedProfileResult.success) {
@@ -291,6 +294,7 @@ export async function resolveDashboardCycle(params: {
     isFirstCycle: isFirstCycleToday,
     surplusMode: profile.surplus_mode,
     initialBudget: profile.initial_budget,
+    yutoriCarryover: profile.yutori_carryover,
     baseCycleBudget,
     confirmedNormalSpentBeforeToday: confirmedSpendResult.data,
   });

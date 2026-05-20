@@ -11,7 +11,7 @@ type Result<T, E = Error> =
   | { success: false; error: E };
 
 const PROFILE_SELECT_COLUMNS =
-  "id,target_amount,target_date,target_duration_months,target_anchor_logical_date,current_total_savings,initial_total_assets,monthly_income,payday,payday_rule,fixed_costs,estimated_electricity,estimated_gas,estimated_water,surplus_mode,initial_budget,last_monthly_reset_logical_date,last_salary_cycle_logical_date,start_concept_completed_at,created_at,updated_at";
+  "id,target_amount,target_date,target_duration_months,target_anchor_logical_date,current_total_savings,initial_total_assets,monthly_income,payday,payday_rule,fixed_costs,estimated_electricity,estimated_gas,estimated_water,surplus_mode,initial_budget,yutori_carryover,last_monthly_reset_logical_date,last_salary_cycle_logical_date,start_concept_completed_at,created_at,updated_at";
 
 export async function fetchProfileByUserId(
   supabase: SupabaseClient<Database>,
@@ -99,14 +99,14 @@ export async function applyMonthlyResetForLogicalDate(
     readonly userId: string;
     readonly logicalDate: string;
     readonly nextTotalSavings: number;
-    readonly nextInitialBudget: number;
+    readonly nextYutoriCarryover: number;
   },
 ): Promise<Result<{ readonly applied: boolean; readonly profile: Profile | null }>> {
   const { data, error } = await supabase
     .from("profiles")
     .update({
       current_total_savings: params.nextTotalSavings,
-      initial_budget: params.nextInitialBudget,
+      yutori_carryover: params.nextYutoriCarryover,
       last_monthly_reset_logical_date: params.logicalDate,
     })
     .eq("id", params.userId)

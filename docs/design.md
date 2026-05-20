@@ -42,7 +42,8 @@
 | `initial_total_assets` | int | オンボーディング時点の**現在の全財産**（要件定義書の用語に一致） |
 | `current_total_savings` | int | **貯金総額（資産側）**。**オンボーディング初回保存時のみ** `initial_total_assets - initial_budget` で初期化する（§4.8）。設定更新のたびにこの式で上書きしない |
 | `surplus_mode` | enum ('STRICT', 'YUTORI') | **通常サイクル（2回目以降）**の月次余剰金処理モード。初回サイクル締めでは使わない |
-| `initial_budget` | int | **第1サイクル:** ユーザー入力の「次の給料日まで使う予算」。**通常サイクル:** 月次リセット・給料日モーダル等で更新する内部のサイクル枠（YUTORI 時は繰り越し込みの可処分を表す。設定 PATCH では上書きしない）。 |
+| `initial_budget` | int | **初回サイクル専用。** ユーザー入力の「次の給料日まで使う予算」。初回サイクル締めでのみ参照する。通常サイクルの予算計算には使わない。 |
+| `yutori_carryover` | int | **通常サイクル YUTORI 用の繰り越し額。** 前サイクルの余剰金。STRICT リセット・初回サイクル締め時は 0 にリセット。通常サイクルの日次予算母数 = `baseCycleBudget + yutori_carryover`（STRICT では `yutori_carryover` を 0 として計算）。設定 PATCH では上書きしない。 |
 | `last_monthly_reset_logical_date` | date nullable | 直近の月次リセット実行日（冪等性用） |
 | `last_salary_cycle_logical_date` | date nullable | 手取り給料を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
 | `start_concept_completed_at` | timestamptz nullable | 初回コンセプト画面（`/start`）完了時刻。NULL の間はメイン `(app)` へ入場前に同画面へ誘導する |
@@ -261,7 +262,7 @@ const D_future =
   / daysUntilNextPayday({ includeToday: false });
 ```
 
-- `remainingCycleBudget`（通常サイクル）: **STRICT** では基準サイクル予算（月収 − 固定費 − 光熱費概算 − 月次貯金ノルマ）から、前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）に加え光熱費実額との差額調整（§4.3）を織り込んだ残りを母数とする。**YUTORI** では給料日リセットで確定した `initial_budget`（繰り越し込み可処分）から同様に差し引く。いずれも**特別支出**（内部 `type = 'SPECIAL'`）の金額は母数に含めない。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
+- `remainingCycleBudget`（通常サイクル）: **STRICT** では基準サイクル予算（月収 − 固定費 − 光熱費概算 − 月次貯金ノルマ）から、前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）に加え光熱費実額との差額調整（§4.3）を織り込んだ残りを母数とする。**YUTORI** では `baseCycleBudget + yutori_carryover`（繰り越し込み）から同様に差し引く（`yutori_carryover` は §4.5 の月次リセットで設定される）。いずれも**特別支出**（内部 `type = 'SPECIAL'`）の金額は母数に含めない。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
 - 支出登録のたびに `remainingToday` と `D_future` をZustandストアで即時更新し、UIに反映する。
 
 ### 4.3 光熱費の予算反映（通常サイクルのみ）
@@ -301,7 +302,8 @@ function closeFirstSalaryCycle(profile: Profile, sumNormalInFirstCycle: number):
   const delta = initialBudget - sumNormalInFirstCycle; // 初回差額
   return {
     current_total_savings: profile.current_total_savings + delta,
-    // 以降は通常サイクル。initial_budget の扱いは次サイクル基準予算の確定ロジックに合わせて更新
+    yutori_carryover: 0, // 初回サイクル締めには繰り越しは発生しない
+    // initial_budget は通常サイクルの計算に使わないため更新しない
   };
 }
 ```
@@ -317,16 +319,19 @@ function processMonthlyReset(
   profile: Profile,
   surplus: number
 ): Partial<Profile> {
-  if (surplus <= 0) return {};
-
-  if (profile.surplus_mode === 'STRICT') {
-    // 余剰金を全額貯金に追加。翌月予算は基準値に戻る。
-    return { current_total_savings: profile.current_total_savings + surplus };
+  if (surplus <= 0) {
+    // 余剰なし（赤字または収支トントン）: 繰り越しをゼロにリセット
+    return { yutori_carryover: 0 };
   }
 
-  // YUTORI: 翌月の可処分所得に上乗せ。貯金総額は変更しない。
-  const baseBudget = calculateBaseBudget(profile);
-  return { initial_budget: baseBudget + surplus };
+  if (profile.surplus_mode === 'STRICT') {
+    // 余剰金を全額貯金に追加。繰り越しは発生しない。
+    return { current_total_savings: profile.current_total_savings + surplus, yutori_carryover: 0 };
+  }
+
+  // YUTORI: 余剰金を繰り越し額として保持。貯金総額は変更しない。
+  // 次サイクルの母数: baseCycleBudget + yutori_carryover
+  return { yutori_carryover: surplus };
 }
 ```
 

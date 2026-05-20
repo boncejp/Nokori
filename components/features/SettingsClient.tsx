@@ -134,6 +134,7 @@ export function SettingsClient({
         todayTransactions: previewContext.previewSnapshot.todayTransactions,
         utilityEstimatesDb: previewContext.previewSnapshot.utilityEstimatesDb,
         initialBudgetDb: previewContext.previewSnapshot.initialBudgetDb,
+        yutoriCarryoverDb: previewContext.previewSnapshot.yutoriCarryoverDb,
       },
       firstCycleCalendar: previewContext.previewSnapshot.firstCycleCalendar,
       draft,

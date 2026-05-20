@@ -37,6 +37,7 @@ export type Database = {
           target_date: string
           target_duration_months: number
           updated_at: string
+          yutori_carryover: number
         }
         Insert: {
           created_at?: string
@@ -60,6 +61,7 @@ export type Database = {
           target_date: string
           target_duration_months: number
           updated_at?: string
+          yutori_carryover?: number
         }
         Update: {
           created_at?: string
@@ -83,6 +85,7 @@ export type Database = {
           target_date?: string
           target_duration_months?: number
           updated_at?: string
+          yutori_carryover?: number
         }
         Relationships: []
       }

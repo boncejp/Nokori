@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 
 import { SettingsClient } from "@/components/features/SettingsClient";
+import { addDays } from "date-fns";
+
 import {
-  calculateBaseCycleBudget,
+  calculateCycleWindow,
   calculateMonthlySavingsQuota,
   calculateYutoriCarryoverDisplay,
+  getFirstCycleEndLogicalDate,
   getLogicalDate,
   isWithinFirstCycle,
   parseJstDateKeyToDate,
@@ -74,26 +77,31 @@ export default async function SettingsPage() {
       })
     : null;
 
-  const baseCycleBudgetSaved =
-    monthlySavingsQuota !== null
-      ? calculateBaseCycleBudget({
-          monthlyIncome: profile.monthly_income,
-          fixedCosts: profile.fixed_costs,
-          estimatedElectricity: profile.estimated_electricity,
-          estimatedGas: profile.estimated_gas,
-          estimatedWater: profile.estimated_water,
-          monthlySavingsQuota,
-        })
-      : null;
+  // 「前月からの繰り越し（参考）」は通常サイクル 2 回目以降かつ YUTORI のみ表示する。
+  // 初回通常サイクル（最初の給料日〜2回目の給料日前日）では YUTORI でも表示しない。
+  const firstNormalCycleStartDate = addDays(
+    getFirstCycleEndLogicalDate({
+      anchorLogicalDate,
+      payday: profile.payday,
+      paydayRule: profile.payday_rule,
+    }),
+    1,
+  );
+  const currentCycleWindow = calculateCycleWindow({
+    referenceDate: logicalNow,
+    payday: profile.payday,
+    paydayRule: profile.payday_rule,
+  });
+  const isSecondOrLaterNormalCycle =
+    !isFirstCycle &&
+    toJstDateString(currentCycleWindow.cycleStartDate) > toJstDateString(firstNormalCycleStartDate);
 
-  const yutoriCarryoverDisplayYen =
-    baseCycleBudgetSaved !== null
-      ? calculateYutoriCarryoverDisplay({
-          surplusMode: profile.surplus_mode,
-          initialBudget: profile.initial_budget,
-          baseCycleBudget: baseCycleBudgetSaved,
-        })
-      : null;
+  const yutoriCarryoverDisplayYen = isSecondOrLaterNormalCycle
+    ? calculateYutoriCarryoverDisplay({
+        surplusMode: profile.surplus_mode,
+        yutoriCarryover: profile.yutori_carryover,
+      })
+    : null;
 
   const logicalTodayKey = previewSnapshot?.logicalTodayKey ?? toJstDateString(logicalNow);
 
