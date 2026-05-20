@@ -13,6 +13,7 @@ const EMPTY_SNAPSHOT = {
     WATER: 5_000,
   },
   initialBudgetDb: 100_000,
+  yutoriCarryoverDb: 0,
 } as const;
 
 describe("calculateSettingsBudgetPreview", () => {
@@ -176,6 +177,7 @@ describe("calculateSettingsBudgetPreview", () => {
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
         initialBudgetDb: 120_000,
+        yutoriCarryoverDb: 0,
       },
       firstCycleCalendar: null,
       draft: {
@@ -194,6 +196,7 @@ describe("calculateSettingsBudgetPreview", () => {
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
         initialBudgetDb: 120_000,
+        yutoriCarryoverDb: 0,
       },
       firstCycleCalendar: null,
       draft: {
@@ -227,6 +230,7 @@ describe("calculateSettingsBudgetPreview", () => {
         todayTransactions: [],
         utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
         initialBudgetDb: 120_000,
+        yutoriCarryoverDb: 0,
       },
       firstCycleCalendar: null,
       draft: {
@@ -246,7 +250,7 @@ describe("calculateSettingsBudgetPreview", () => {
     expect(differentInitialBudget.futureDailyBudget).toBe(looserFixed.futureDailyBudget);
   });
 
-  it("通常サイクル・YUTORI は保存済み initial_budget が基準より大きいと STRICT より日次が有利になる", () => {
+  it("通常サイクル・YUTORI は yutori_carryover が正値のとき STRICT より日次が有利になる", () => {
     const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
     const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
 
@@ -254,7 +258,8 @@ describe("calculateSettingsBudgetPreview", () => {
       confirmedNormalSpentBeforeToday: 0,
       todayTransactions: [],
       utilityEstimatesDb: EMPTY_SNAPSHOT.utilityEstimatesDb,
-      initialBudgetDb: 280_000,
+      initialBudgetDb: 50_000,
+      yutoriCarryoverDb: 30_000,
     };
 
     const draftBase = {

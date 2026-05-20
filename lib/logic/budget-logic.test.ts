@@ -473,50 +473,56 @@ describe("calculateTargetDateFromDuration", () => {
 });
 
 describe("processMonthlyReset", () => {
-  it("STRICT は余剰を貯金に加算する", () => {
+  it("STRICT は余剰を貯金に加算し、繰り越しはゼロにする", () => {
     const result = processMonthlyReset({
       surplusMode: "STRICT",
       currentTotalSavings: 100_000,
-      baseBudget: 80_000,
       surplus: 5_000,
     });
     expect(result.nextTotalSavings).toBe(105_000);
-    expect(result.nextInitialBudget).toBe(80_000);
+    expect(result.nextYutoriCarryover).toBe(0);
   });
 
-  it("YUTORI は余剰を翌月予算に加算する", () => {
+  it("YUTORI は余剰を繰り越し額として保持する（貯金総額は変わらない）", () => {
     const result = processMonthlyReset({
       surplusMode: "YUTORI",
       currentTotalSavings: 100_000,
-      baseBudget: 80_000,
       surplus: 5_000,
     });
     expect(result.nextTotalSavings).toBe(100_000);
-    expect(result.nextInitialBudget).toBe(85_000);
+    expect(result.nextYutoriCarryover).toBe(5_000);
+  });
+
+  it("余剰なし（赤字）のとき YUTORI でも繰り越しはゼロ", () => {
+    const result = processMonthlyReset({
+      surplusMode: "YUTORI",
+      currentTotalSavings: 100_000,
+      surplus: -3_000,
+    });
+    expect(result.nextTotalSavings).toBe(100_000);
+    expect(result.nextYutoriCarryover).toBe(0);
   });
 });
 
 describe("processFirstCycleClose", () => {
-  it("初回差額を貯金総額に加算し、次サイクル予算は基準予算にする（超過例）", () => {
+  it("初回差額を貯金総額に加算する（超過例）。yutori_carryover は 0 にリセット", () => {
     const result = processFirstCycleClose({
       currentTotalSavings: 90_000,
       initialBudget: 50_000,
       sumPlainNormalSpentInFirstCycle: 60_000,
-      baseCycleBudget: 88_000,
     });
     expect(result.nextTotalSavings).toBe(80_000);
-    expect(result.nextInitialBudget).toBe(88_000);
+    expect(result.nextYutoriCarryover).toBe(0);
   });
 
-  it("初回差額が正のときは貯金総額が増える（余剰例）", () => {
+  it("初回差額が正のときは貯金総額が増える（余剰例）。yutori_carryover は 0 にリセット", () => {
     const result = processFirstCycleClose({
       currentTotalSavings: 90_000,
       initialBudget: 50_000,
       sumPlainNormalSpentInFirstCycle: 40_000,
-      baseCycleBudget: 88_000,
     });
     expect(result.nextTotalSavings).toBe(100_000);
-    expect(result.nextInitialBudget).toBe(88_000);
+    expect(result.nextYutoriCarryover).toBe(0);
   });
 });
 
@@ -566,6 +572,7 @@ describe("next remaining cycle budget", () => {
       isFirstCycle: true,
       surplusMode: "STRICT",
       initialBudget: 120_000,
+      yutoriCarryover: 0,
       baseCycleBudget: 95_000,
       confirmedNormalSpentBeforeToday: 12_000,
     });
@@ -573,7 +580,7 @@ describe("next remaining cycle budget", () => {
     expect(result).toBe(108_000);
   });
 
-  it("2回目以降・STRICT は基準サイクル予算のみから確定支出を差し引く", () => {
+  it("2回目以降・STRICT は baseCycleBudget のみから確定支出を差し引く（yutori_carryover は無視）", () => {
     const monthlySavingsQuota = calculateMonthlySavingsQuota({
       targetAmount: 900_000,
       currentTotalSavings: 450_000,
@@ -592,6 +599,7 @@ describe("next remaining cycle budget", () => {
       isFirstCycle: false,
       surplusMode: "STRICT",
       initialBudget: 150_000,
+      yutoriCarryover: 30_000,
       baseCycleBudget,
       confirmedNormalSpentBeforeToday: 40_000,
     });
@@ -600,34 +608,47 @@ describe("next remaining cycle budget", () => {
     expect(result).toBeCloseTo(98_714.285, 2);
   });
 
-  it("2回目以降・YUTORI は initial_budget（繰り越し込み）から確定支出を差し引く", () => {
+  it("2回目以降・YUTORI は baseCycleBudget + yutori_carryover から確定支出を差し引く", () => {
     const monthlyReset = processMonthlyReset({
       surplusMode: "YUTORI",
       currentTotalSavings: 200_000,
-      baseBudget: 100_000,
       surplus: 25_000,
     });
-    expect(monthlyReset.nextInitialBudget).toBe(125_000);
+    expect(monthlyReset.nextYutoriCarryover).toBe(25_000);
 
     const remaining = calculateNextRemainingCycleBudget({
       isFirstCycle: false,
       surplusMode: "YUTORI",
-      initialBudget: monthlyReset.nextInitialBudget,
+      initialBudget: 50_000,
+      yutoriCarryover: monthlyReset.nextYutoriCarryover,
       baseCycleBudget: 100_000,
       confirmedNormalSpentBeforeToday: 0,
     });
     expect(remaining).toBe(125_000);
   });
 
-  it("2回目以降・STRICT では initial_budget が基準より大きくても日次の母数には使わない", () => {
+  it("2回目以降・STRICT では yutori_carryover が正値でも baseCycleBudget のみを母数にする", () => {
     const result = calculateNextRemainingCycleBudget({
       isFirstCycle: false,
       surplusMode: "STRICT",
       initialBudget: 200_000,
+      yutoriCarryover: 30_000,
       baseCycleBudget: 100_000,
       confirmedNormalSpentBeforeToday: 10_000,
     });
     expect(result).toBe(90_000);
+  });
+
+  it("2回目以降・YUTORI で yutori_carryover が 0 のとき baseCycleBudget のみになる", () => {
+    const result = calculateNextRemainingCycleBudget({
+      isFirstCycle: false,
+      surplusMode: "YUTORI",
+      initialBudget: 50_000,
+      yutoriCarryover: 0,
+      baseCycleBudget: 100_000,
+      confirmedNormalSpentBeforeToday: 20_000,
+    });
+    expect(result).toBe(80_000);
   });
 });
 
@@ -857,26 +878,29 @@ describe("resolveInitialBudgetForSettingsUpdate", () => {
 });
 
 describe("calculateYutoriCarryoverDisplay", () => {
-  it("YUTORI のみ max(0, initial − base) を返す", () => {
+  it("YUTORI のとき yutori_carryover をそのまま返す", () => {
     expect(
       calculateYutoriCarryoverDisplay({
         surplusMode: "YUTORI",
-        initialBudget: 130_000,
-        baseCycleBudget: 100_000,
+        yutoriCarryover: 30_000,
       }),
     ).toBe(30_000);
+  });
+
+  it("YUTORI で繰り越しがゼロのとき 0 を返す", () => {
     expect(
       calculateYutoriCarryoverDisplay({
         surplusMode: "YUTORI",
-        initialBudget: 90_000,
-        baseCycleBudget: 100_000,
+        yutoriCarryover: 0,
       }),
     ).toBe(0);
+  });
+
+  it("STRICT のとき null を返す", () => {
     expect(
       calculateYutoriCarryoverDisplay({
         surplusMode: "STRICT",
-        initialBudget: 130_000,
-        baseCycleBudget: 100_000,
+        yutoriCarryover: 30_000,
       }),
     ).toBeNull();
   });
