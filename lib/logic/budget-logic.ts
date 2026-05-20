@@ -232,35 +232,35 @@ export function calculateNextPayday(params: {
 }
 
 /**
- * 給料日リセット時の余剰金処理（STRICT / YUTORI）。
+ * 通常サイクルの給料日リセット時の余剰金処理（STRICT / YUTORI）。
+ * YUTORI の繰り越し額は initial_budget ではなく yutori_carryover カラムに分離して保持する。
  */
 export function processMonthlyReset(params: {
   readonly surplusMode: SurplusMode;
   readonly currentTotalSavings: number;
-  readonly baseBudget: number;
   readonly surplus: number;
 }): {
   readonly nextTotalSavings: number;
-  readonly nextInitialBudget: number;
+  readonly nextYutoriCarryover: number;
 } {
-  const { surplusMode, currentTotalSavings, baseBudget, surplus } = params;
+  const { surplusMode, currentTotalSavings, surplus } = params;
   if (surplus <= 0) {
     return {
       nextTotalSavings: currentTotalSavings,
-      nextInitialBudget: baseBudget,
+      nextYutoriCarryover: 0,
     };
   }
 
   if (surplusMode === "STRICT") {
     return {
       nextTotalSavings: currentTotalSavings + surplus,
-      nextInitialBudget: baseBudget,
+      nextYutoriCarryover: 0,
     };
   }
 
   return {
     nextTotalSavings: currentTotalSavings,
-    nextInitialBudget: baseBudget + surplus,
+    nextYutoriCarryover: surplus,
   };
 }
 
@@ -350,18 +350,18 @@ export function resolveInitialBudgetForSettingsUpdate(params: {
 }
 
 /**
- * YUTORI 時に「基準サイクル予算を超えた `initial_budget`」を繰り越し分として表示する（読み取り専用 UI 用）。
+ * YUTORI 時に前サイクルから繰り越された額を返す（読み取り専用 UI 用）。
  * STRICT では常に null（定義しない）。
+ * 繰り越し額は yutori_carryover カラムに直接保持されているため、そのまま返す。
  */
 export function calculateYutoriCarryoverDisplay(params: {
   readonly surplusMode: SurplusMode;
-  readonly initialBudget: number;
-  readonly baseCycleBudget: number;
+  readonly yutoriCarryover: number;
 }): number | null {
   if (params.surplusMode !== "YUTORI") {
     return null;
   }
-  return Math.max(0, params.initialBudget - params.baseCycleBudget);
+  return params.yutoriCarryover;
 }
 
 /**
@@ -414,42 +414,43 @@ export function isFirstCycleInitialBudgetExceedingTotalAssets(params: {
 
 /**
  * 次サイクルの remainingCycleBudget（当日・翌日以降の日次の分子）を算出する。
- * 初回は `initial_budget` のみ。通常サイクルは STRICT では基準サイクル予算、
- * YUTORI では月次リセットで確定した `initial_budget`（繰り越し込み可処分）を母数とする。
+ * 初回は `initial_budget` のみ。通常サイクルは STRICT・YUTORI ともに baseCycleBudget を基礎とし、
+ * YUTORI のみ yutori_carryover（前サイクル余剰金）を上乗せする。
  */
 export function calculateNextRemainingCycleBudget(params: {
   readonly isFirstCycle: boolean;
   readonly surplusMode: SurplusMode;
   readonly initialBudget: number;
+  readonly yutoriCarryover: number;
   readonly baseCycleBudget: number;
   readonly confirmedNormalSpentBeforeToday: number;
 }): number {
-  const { isFirstCycle, surplusMode, initialBudget, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
+  const { isFirstCycle, surplusMode, initialBudget, yutoriCarryover, baseCycleBudget, confirmedNormalSpentBeforeToday } = params;
   if (isFirstCycle) {
     return initialBudget - confirmedNormalSpentBeforeToday;
   }
-  if (surplusMode === "YUTORI") {
-    return initialBudget - confirmedNormalSpentBeforeToday;
-  }
-  return baseCycleBudget - confirmedNormalSpentBeforeToday;
+  const effectiveBudget =
+    surplusMode === "YUTORI" ? baseCycleBudget + yutoriCarryover : baseCycleBudget;
+  return effectiveBudget - confirmedNormalSpentBeforeToday;
 }
 
 /**
  * 初回サイクル締め（次の給料日リセット）: STRICT / YUTORI を適用せず、初回差額のみ貯金総額へ反映する。
+ * 通常サイクル移行後は initial_budget を計算に使わないため更新しない。
+ * yutori_carryover は 0 にリセットする（初回サイクル締めに繰り越しは発生しない）。
  */
 export function processFirstCycleClose(params: {
   readonly currentTotalSavings: number;
   readonly initialBudget: number;
   readonly sumPlainNormalSpentInFirstCycle: number;
-  readonly baseCycleBudget: number;
 }): {
   readonly nextTotalSavings: number;
-  readonly nextInitialBudget: number;
+  readonly nextYutoriCarryover: number;
 } {
   const firstCycleDelta = params.initialBudget - params.sumPlainNormalSpentInFirstCycle;
   return {
     nextTotalSavings: params.currentTotalSavings + firstCycleDelta,
-    nextInitialBudget: params.baseCycleBudget,
+    nextYutoriCarryover: 0,
   };
 }
 
