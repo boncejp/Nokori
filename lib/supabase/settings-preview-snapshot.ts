@@ -24,6 +24,7 @@ export type SettingsPreviewSnapshot = {
   readonly logicalTodayKey: string;
   readonly currentTotalSavingsDb: number;
   readonly initialBudgetDb: number;
+  readonly yutoriCarryoverDb: number;
   readonly confirmedNormalSpentBeforeToday: number;
   readonly todayTransactions: readonly DashboardPreviewTransaction[];
   readonly utilityEstimatesDb: UtilityEstimateMap;
@@ -103,6 +104,7 @@ export async function fetchSettingsPreviewSnapshot(params: {
       logicalTodayKey: toJstDateString(params.logicalToday),
       currentTotalSavingsDb: params.profile.current_total_savings,
       initialBudgetDb: params.profile.initial_budget,
+      yutoriCarryoverDb: params.profile.yutori_carryover,
       confirmedNormalSpentBeforeToday,
       todayTransactions,
       utilityEstimatesDb: {
