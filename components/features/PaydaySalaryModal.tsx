@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
+
 type PaydaySalaryModalProps = {
   readonly salaryPrompt: {
     readonly cycleStartLogicalDate: string;
@@ -12,15 +14,22 @@ type PaydaySalaryModalProps = {
 
 export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
   const router = useRouter();
-  const [value, setValue] = useState(String(salaryPrompt.currentMonthlyIncome));
+  // 桁のみを状態として保持し、表示は千区切りフォーマットを適用する（設定画面と同じパターン）
+  const [numericValue, setNumericValue] = useState(
+    salaryPrompt.currentMonthlyIncome > 0 ? String(salaryPrompt.currentMonthlyIncome) : "",
+  );
   const [errorMessage, setErrorMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNumericValue(toNumericOnly(e.target.value));
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage("");
 
-    const parsed = Number(value);
+    const parsed = Number(numericValue);
     if (!Number.isFinite(parsed) || parsed < 1) {
       setErrorMessage("手取りは1円以上の整数で入力してください。");
       return;
@@ -78,11 +87,12 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
           <label className="flex flex-col gap-1 text-sm text-nokori-text">
             <span>手取り（円）</span>
             <input
-              type="number"
-              min={1}
+              type="text"
+              inputMode="numeric"
               required
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
+              value={formatDigitsWithCommas(numericValue)}
+              onChange={handleChange}
+              placeholder="例: 260,000"
               className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
             />
           </label>
