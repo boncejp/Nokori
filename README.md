@@ -68,6 +68,24 @@ npm run dev
 
 ブラウザで `http://localhost:3000` を開いて動作確認してください。
 
+## テスト
+
+```bash
+# ユニットテスト（Vitest）
+npm run test:run
+
+# 型チェック
+npm run typecheck
+
+# リント
+npm run lint
+
+# E2E テスト（Playwright）
+# ※ 事前に .env に E2E_TEST_EMAIL / E2E_TEST_PASSWORD / SUPABASE_SERVICE_ROLE_KEY を設定し、
+#    アプリを起動した状態で実行してください。
+npm run test:e2e
+```
+
 ## ローカル Supabase を使う場合（任意）
 
 OAuth を除く検証など、**Docker でローカル Postgres を立てる**場合のみ `supabase start` を使います。API の URL とキーは次で確認できます。

@@ -376,6 +376,16 @@ function processMonthlyReset(
 
 ## 6. テスト戦略
 
+### 6.0 テスト実行コマンド
+
+| コマンド | 内容 |
+|---|---|
+| `npm run test:run` | Vitest 全テストをCI向けに1回実行 |
+| `npm run typecheck` | TypeScript 型チェック（`tsc --noEmit`） |
+| `npm run lint` | ESLint |
+| `npm run test:e2e` | Playwright E2E テスト（要：§3.3.2 の環境変数） |
+| `npm run test:e2e:ui` | Playwright UI モード（ローカル開発向け） |
+
 ### 6.1 Unit Test（Vitest）
 
 - `getLogicalDate()` の境界値テスト（JST 02:59 → 前日 / 03:00 → 当日）。
