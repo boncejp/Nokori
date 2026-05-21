@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 
 /**
  * サービスロールキーを使った Supabase 管理クライアントを生成する。
@@ -20,29 +21,95 @@ export function createSupabaseAdminClient(): SupabaseClient {
 }
 
 /**
- * テストユーザーのマジックリンクを生成して返す。
- * メールを送らずリンク URL だけを返す Supabase admin API を使用する。
- * Playwright は返された URL を直接踏んで認証を完了させる。
- *
- * Supabase ダッシュボードの Redirect URLs に `redirectTo` のオリジンが
- * 許可されている必要がある。
+ * テストユーザーを確保し、その場限りの一時パスワードを設定して返す。
+ * ユーザーが存在しない場合は新規作成する。
  */
-export async function generateMagicLink(params: {
-  readonly email: string;
-  readonly redirectTo: string;
-}): Promise<string> {
-  const adminClient = createSupabaseAdminClient();
-  const { data, error } = await adminClient.auth.admin.generateLink({
-    type: "magiclink",
-    email: params.email,
-    options: { redirectTo: params.redirectTo },
-  });
+async function ensureTestUserWithEphemeralPassword(
+  adminClient: SupabaseClient,
+  email: string,
+): Promise<string> {
+  const ephemeralPassword = `nokori-e2e-${crypto.randomUUID()}`;
 
-  if (error ?? !data.properties.action_link) {
+  const { data: listData, error: listError } = await adminClient.auth.admin.listUsers();
+  if (listError) {
+    throw new Error(`ユーザー一覧の取得に失敗しました: ${listError.message}`);
+  }
+
+  const existingUser = listData.users.find((u) => u.email === email);
+
+  if (existingUser) {
+    const { error } = await adminClient.auth.admin.updateUserById(existingUser.id, {
+      password: ephemeralPassword,
+    });
+    if (error) {
+      throw new Error(`テストユーザーのパスワード更新に失敗しました: ${error.message}`);
+    }
+  } else {
+    const { error } = await adminClient.auth.admin.createUser({
+      email,
+      password: ephemeralPassword,
+      email_confirm: true,
+    });
+    if (error) {
+      throw new Error(`テストユーザーの作成に失敗しました: ${error.message}`);
+    }
+  }
+
+  return ephemeralPassword;
+}
+
+/**
+ * signInWithPassword を Node.js 側で実行し、@supabase/ssr が設定するクッキーを返す。
+ *
+ * マジックリンク方式はハッシュフラグメント（#access_token=...）を返すため
+ * サーバーサイドの /auth/callback では処理できない。
+ * 代わりに createServerClient + モッククッキーストアで完結させる。
+ */
+export async function signInAndCaptureCookies(params: {
+  readonly email: string;
+}): Promise<ReadonlyArray<{ readonly name: string; readonly value: string }>> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
     throw new Error(
-      `マジックリンクの生成に失敗しました: ${error?.message ?? "action_link が空"}`,
+      "E2E 必須環境変数が未設定: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY",
     );
   }
 
-  return data.properties.action_link;
+  const adminClient = createSupabaseAdminClient();
+  const ephemeralPassword = await ensureTestUserWithEphemeralPassword(adminClient, params.email);
+
+  const capturedCookies: Array<{ name: string; value: string }> = [];
+
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll: () => capturedCookies,
+      setAll: (cookiesToSet) => {
+        for (const { name, value } of cookiesToSet) {
+          const existingIndex = capturedCookies.findIndex((c) => c.name === name);
+          if (existingIndex >= 0) {
+            capturedCookies[existingIndex] = { name, value };
+          } else {
+            capturedCookies.push({ name, value });
+          }
+        }
+      },
+    },
+  });
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: params.email,
+    password: ephemeralPassword,
+  });
+
+  if (error) {
+    throw new Error(`サインインに失敗しました: ${error.message}`);
+  }
+
+  if (capturedCookies.length === 0) {
+    throw new Error("サインイン後にクッキーが設定されませんでした");
+  }
+
+  return capturedCookies;
 }

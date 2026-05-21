@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { test as setup, expect } from "@playwright/test";
 
-import { generateMagicLink } from "./helpers/supabase-admin";
+import { signInAndCaptureCookies } from "./helpers/supabase-admin";
 
 export const AUTH_STATE_PATH = path.join(__dirname, ".auth/user.json");
 
@@ -10,35 +10,46 @@ export const AUTH_STATE_PATH = path.join(__dirname, ".auth/user.json");
  * テストユーザーを認証し、Playwright のストレージ状態に保存する。
  *
  * 認証フロー:
- * 1. Admin API でテストユーザーのマジックリンクを生成（メール送信なし）
- * 2. Playwright がそのリンクを踏む → Supabase で検証 → /auth/callback?code=... にリダイレクト
- * 3. /auth/callback が code を exchangeCodeForSession で交換し、SSR セッションクッキーを設定
- * 4. アプリ内の遷移先に到達したことを確認してストレージ状態を保存
+ * 1. Admin API でテストユーザーを作成（または既存ユーザーのパスワードを一時更新）
+ * 2. Node.js 側で createServerClient + signInWithPassword を実行
+ * 3. @supabase/ssr がモッククッキーストアに書き込んだセッションクッキーを取得
+ * 4. Playwright のブラウザコンテキストに注入
+ * 5. アプリのページを開いてミドルウェアがセッションを認識することを確認
+ * 6. storageState に保存
  *
- * 前提条件:
- * - NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, E2E_TEST_EMAIL が設定されていること
- * - Supabase ダッシュボード > Authentication > URL Configuration > Redirect URLs に
- *   `{PLAYWRIGHT_BASE_URL}/**`（デフォルト: http://localhost:3000/**）が登録されていること
+ * なぜマジックリンク方式をやめたか:
+ *   admin.generateLink が返す URL は #access_token=... 形式（implicit grant）で
+ *   ハッシュフラグメントはサーバーに届かないため /auth/callback で処理できない。
+ *   代わりに Node.js 内で完結する signInWithPassword を使う。
  */
-setup("テストユーザーを認証する", async ({ page }) => {
+setup("テストユーザーを認証する", async ({ context }) => {
   const email = process.env.E2E_TEST_EMAIL;
   if (!email) {
     throw new Error("E2E_TEST_EMAIL が設定されていません");
   }
 
+  const cookies = await signInAndCaptureCookies({ email });
+
   const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
-  const callbackUrl = `${baseUrl}/auth/callback`;
+  const domain = new URL(baseUrl).hostname;
 
-  const actionLink = await generateMagicLink({ email, redirectTo: callbackUrl });
-
-  // マジックリンクを踏む → Supabase → /auth/callback → アプリ内ページ
-  await page.goto(actionLink);
-
-  // 認証後はオンボーディング・ウェルカム・ダッシュボードいずれかに遷移する
-  await expect(page).toHaveURL(
-    /\/(dashboard|onboarding|welcome|start|legal)?$/,
-    { timeout: 20_000 },
+  await context.addCookies(
+    cookies.map(({ name, value }) => ({
+      name,
+      value,
+      domain,
+      path: "/",
+      httpOnly: false,
+      secure: false,
+      sameSite: "Lax" as const,
+    })),
   );
 
-  await page.context().storageState({ path: AUTH_STATE_PATH });
+  // ミドルウェアがセッションを認識しアプリ内ページに到達できることを確認する
+  const page = await context.newPage();
+  await page.goto(baseUrl);
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 15_000 });
+  await page.close();
+
+  await context.storageState({ path: AUTH_STATE_PATH });
 });
