@@ -454,14 +454,14 @@ export function processFirstCycleClose(params: {
   };
 }
 
-type PlainNormalExpenseRow = {
+type TransactionAmountRow = {
   readonly type: "NORMAL" | "SPECIAL";
   readonly utility_type: UtilityType | null;
   readonly amount: number;
 };
 
 /** 初回サイクル締め・初回残予算などで用いる「普通支出」（type=NORMAL かつ光熱費なし）の合計。 */
-export function sumPlainNormalExpenseAmounts(transactions: readonly PlainNormalExpenseRow[]): number {
+export function sumPlainNormalExpenseAmounts(transactions: readonly TransactionAmountRow[]): number {
   return transactions.reduce((sum, transaction) => {
     if (transaction.type !== "NORMAL") {
       return sum;
@@ -473,17 +473,11 @@ export function sumPlainNormalExpenseAmounts(transactions: readonly PlainNormalE
   }, 0);
 }
 
-type ProfileLikeTransactionRow = {
-  readonly type: "NORMAL" | "SPECIAL";
-  readonly utility_type: UtilityType | null;
-  readonly amount: number;
-};
-
 /**
  * 通常サイクルでサイクル開始〜前日までに確定した支出（普通支出に加え、光熱費は実額と概算の差を織り込む）。
  */
 export function calculateConfirmedNormalSpentWithUtilityAdjustment(
-  transactions: readonly ProfileLikeTransactionRow[],
+  transactions: readonly TransactionAmountRow[],
   utilityEstimates: UtilityEstimateMap,
 ): number {
   return transactions.reduce((sum, transaction) => {
