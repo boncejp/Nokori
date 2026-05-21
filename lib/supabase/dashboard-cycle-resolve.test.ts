@@ -73,6 +73,7 @@ function createTestProfile(overrides: Partial<Profile> = {}): Profile {
     current_total_savings: 100_000,
     surplus_mode: "STRICT",
     initial_budget: 100_000,
+    yutori_carryover: 0,
     last_monthly_reset_logical_date: null,
     last_salary_cycle_logical_date: null,
     start_concept_completed_at: null,
