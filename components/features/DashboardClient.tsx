@@ -362,6 +362,7 @@ function TransactionKindSegments({
           >
             <div className="flex flex-1 items-center gap-1.5">
               <button
+                data-testid={`kind-option-${option.value.toLowerCase()}`}
                 type="button"
                 role="radio"
                 aria-checked={selected}
