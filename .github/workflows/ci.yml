@@ -58,15 +58,37 @@ jobs:
           TZ: Asia/Tokyo
 
   # ──────────────────────────────────────────────
+  # E2E 実行判定（ジョブ if では secrets を参照できないため step で判定）
+  # ──────────────────────────────────────────────
+  e2e-gate:
+    name: E2E 実行判定
+    runs-on: ubuntu-latest
+    outputs:
+      run_e2e: ${{ steps.check.outputs.run_e2e }}
+    steps:
+      - id: check
+        env:
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "$E2E_TEST_EMAIL" ] && [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] && \
+             [ -n "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "run_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ──────────────────────────────────────────────
   # Playwright E2E テスト
-  # Secrets が設定されている場合のみ実行
+  # 上記ゲートで必要な Secrets が揃っている場合のみ実行
   # ──────────────────────────────────────────────
   e2e:
     name: Playwright E2E テスト
     runs-on: ubuntu-latest
-    needs: [lint-typecheck, unit-test]
-    # E2E_TEST_EMAIL Secret が設定されていれば実行する
-    if: ${{ secrets.E2E_TEST_EMAIL != '' }}
+    needs: [lint-typecheck, unit-test, e2e-gate]
+    if: needs.e2e-gate.outputs.run_e2e == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -81,8 +103,14 @@ jobs:
       - name: Playwright ブラウザのインストール
         run: npx playwright install chromium --with-deps
 
-      - name: アプリをビルド・起動
-        run: npm run build && npm run start &
+      - name: アプリをビルド
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: アプリを起動
+        run: npm run start &
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
