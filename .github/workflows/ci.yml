@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一ブランチで複数の CI が走ったとき、古い方をキャンセルする
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Lint & 型チェック
+  # ──────────────────────────────────────────────
+  lint-typecheck:
+    name: Lint & 型チェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript 型チェック
+        run: npm run typecheck
+
+  # ──────────────────────────────────────────────
+  # Vitest ユニットテスト
+  # ──────────────────────────────────────────────
+  unit-test:
+    name: Vitest ユニットテスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: テスト実行
+        run: npm run test:run
+        env:
+          TZ: Asia/Tokyo
+
+  # ──────────────────────────────────────────────
+  # Playwright E2E テスト
+  # Secrets が設定されている場合のみ実行
+  # ──────────────────────────────────────────────
+  e2e:
+    name: Playwright E2E テスト
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck, unit-test]
+    # E2E_TEST_EMAIL Secret が設定されていれば実行する
+    if: ${{ secrets.E2E_TEST_EMAIL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: Playwright ブラウザのインストール
+        run: npx playwright install chromium --with-deps
+
+      - name: アプリをビルド・起動
+        run: npm run build && npm run start &
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: アプリの起動を待機
+        run: npx wait-on http://localhost:3000 --timeout 60000
+
+      - name: Playwright E2E テスト実行
+        run: npm run test:e2e
+        env:
+          TZ: Asia/Tokyo
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+
+      - name: テストレポートを保存
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
