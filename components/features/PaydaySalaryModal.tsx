@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
+import { getErrorMessageFromResponseBody } from "@/lib/logic/api-response-parsing";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/logic/money-input-format";
 
 type PaydaySalaryModalProps = {
   readonly salaryPrompt: {
@@ -46,15 +47,10 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
         }),
       });
       const body: unknown = await response.json();
-      const message =
-        typeof body === "object" &&
-        body !== null &&
-        "errorMessage" in body &&
-        typeof body.errorMessage === "string"
-          ? body.errorMessage
-          : "保存に失敗しました。";
 
       if (!response.ok) {
+        const message =
+          getErrorMessageFromResponseBody(body) ?? "保存に失敗しました。時間をおいて再試行してください。";
         setErrorMessage(message);
         setIsSaving(false);
         return;

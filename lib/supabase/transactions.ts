@@ -1,16 +1,20 @@
+/**
+ * transactions テーブルへの RLS 付きアクセス。
+ * INSERT 時の logical_date は 27:00 ルール（getLogicalDate）で算出する。
+ */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
-import { getLogicalDate, TIMEZONE, type UtilityType } from "@/lib/logic/budget-logic";
+import { TIMEZONE } from "@/lib/constants/time";
+import { getLogicalDate, toJstDateString } from "@/lib/logic/budget-logic";
+import type { UtilityType } from "@/lib/types/domain";
+import type { Result } from "@/lib/types/result";
 import type { Database, Tables, TablesInsert } from "@/lib/types/database";
 
 type Transaction = Tables<"transactions">;
 type TransactionInsert = TablesInsert<"transactions">;
-
-type Result<T, E = Error> =
-  | { success: true; data: T }
-  | { success: false; error: E };
 
 type InsertTransactionInput = {
   readonly amount: number;
@@ -21,14 +25,6 @@ type InsertTransactionInput = {
 
 const TRANSACTION_SELECT_COLUMNS =
   "id,user_id,amount,memo,type,utility_type,logical_date,created_at";
-
-function toJstDateString(date: Date): string {
-  const jstDate = toZonedTime(date, TIMEZONE);
-  const year = String(jstDate.getFullYear());
-  const month = String(jstDate.getMonth() + 1).padStart(2, "0");
-  const day = String(jstDate.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 export async function listTransactionsByLogicalDate(
   supabase: SupabaseClient<Database>,

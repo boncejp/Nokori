@@ -1,4 +1,4 @@
-import type { UtilityType } from "@/lib/logic/budget-logic";
+import type { UtilityType } from "@/lib/types/domain";
 import type { TransactionKind } from "@/lib/logic/transaction-validation";
 
 type TransactionPersistencePlan = {

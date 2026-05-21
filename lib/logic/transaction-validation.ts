@@ -1,11 +1,9 @@
-import type { UtilityType } from "@/lib/logic/budget-logic";
+import type { UtilityType } from "@/lib/types/domain";
+import type { ValidationResult } from "@/lib/types/result";
+import { isRecord } from "@/lib/types/object-parsing";
 
 export const TRANSACTION_KIND_VALUES = ["NORMAL", "SPECIAL", "UTILITY"] as const;
 export type TransactionKind = (typeof TRANSACTION_KIND_VALUES)[number];
-
-type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; errorMessage: string };
 
 type ValidTransactionPayload = {
   readonly amount: number;
@@ -13,10 +11,6 @@ type ValidTransactionPayload = {
   readonly kind: TransactionKind;
   readonly utilityType: UtilityType | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function parseKind(rawKind: unknown): ValidationResult<TransactionKind> {
   if (typeof rawKind !== "string") {

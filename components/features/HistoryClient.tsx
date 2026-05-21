@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import type { UtilityType } from "@/lib/logic/budget-logic";
+import { getErrorMessageFromResponseBody } from "@/lib/logic/api-response-parsing";
+import type { UtilityType } from "@/lib/types/domain";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 
 type HistoryClientProps = {
@@ -221,17 +222,4 @@ export function HistoryClient({
       )}
     </section>
   );
-}
-
-function getErrorMessageFromResponseBody(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-  if (!("errorMessage" in body)) {
-    return null;
-  }
-  if (typeof body.errorMessage !== "string") {
-    return null;
-  }
-  return body.errorMessage;
 }

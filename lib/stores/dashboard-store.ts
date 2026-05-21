@@ -1,27 +1,32 @@
+/**
+ * ダッシュボードのクライアント状態（Zustand）。
+ *
+ * - サーバーが算出した `remainingCycleBudget` 等を hydrate する
+ * - 支出の楽観的追加・ロールバック・削除後のメトリクス再計算
+ * - 表示用の数値は `calculateDashboardCycleMetrics`（純粋関数）に委譲
+ */
 "use client";
 
 import { create } from "zustand";
 
+import { getErrorMessageFromResponseBody } from "@/lib/logic/api-response-parsing";
 import { calculateDashboardCycleMetrics } from "@/lib/logic/dashboard-cycle-metrics";
 import {
   calculateCycleWindow,
   calculateFirstCycleDailyProrationDayCounts,
   calculateNormalCycleDailyProrationDayCounts,
-  getLogicalDate,
   parseJstDateKeyToDate,
-  type UtilityType,
 } from "@/lib/logic/budget-logic";
+import { isRecord } from "@/lib/types/object-parsing";
+import type { UtilityEstimateMap, UtilityType } from "@/lib/types/domain";
 
-export type DashboardTransaction = {
-  readonly id: string;
-  readonly amount: number;
-  readonly memo: string | null;
-  readonly type: "NORMAL" | "SPECIAL";
-  readonly utility_type: UtilityType | null;
-  readonly logical_date: string;
-  readonly created_at: string;
-  readonly isOptimistic: boolean;
-};
+import {
+  isDashboardTransaction,
+  resolveLogicalTodayDate,
+  type DashboardTransaction,
+} from "./dashboard-transaction-parsing";
+
+export type { DashboardTransaction } from "./dashboard-transaction-parsing";
 
 type TransactionKind = "NORMAL" | "SPECIAL" | "UTILITY";
 
@@ -35,8 +40,6 @@ type SubmitTransactionInput = {
 type SubmitTransactionResult =
   | { success: true }
   | { success: false; errorMessage: string };
-
-type UtilityEstimateMap = Readonly<Record<UtilityType, number>>;
 
 type DashboardHydration = {
   readonly logicalToday: string;
@@ -118,51 +121,6 @@ function createOptimisticTransaction(input: SubmitTransactionInput): DashboardTr
   };
 }
 
-function getErrorMessageFromResponseBody(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-  if (!("errorMessage" in body)) {
-    return null;
-  }
-  const errorMessage = body.errorMessage;
-  if (typeof errorMessage !== "string") {
-    return null;
-  }
-  return errorMessage;
-}
-
-function isDashboardTransaction(value: unknown): value is DashboardTransaction {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  if (!("id" in value) || typeof value.id !== "string") {
-    return false;
-  }
-  if (!("amount" in value) || typeof value.amount !== "number") {
-    return false;
-  }
-  if (!("memo" in value) || !(typeof value.memo === "string" || value.memo === null)) {
-    return false;
-  }
-  if (!("type" in value) || !(value.type === "NORMAL" || value.type === "SPECIAL")) {
-    return false;
-  }
-  if (
-    !("utility_type" in value) ||
-    !(value.utility_type === null || value.utility_type === "ELECTRICITY" || value.utility_type === "GAS" || value.utility_type === "WATER")
-  ) {
-    return false;
-  }
-  if (!("logical_date" in value) || typeof value.logical_date !== "string") {
-    return false;
-  }
-  if (!("created_at" in value) || typeof value.created_at !== "string") {
-    return false;
-  }
-  return true;
-}
-
 function rollbackToPreviousState(
   set: (partial: Partial<DashboardStoreState>) => void,
   previousState: DashboardStoreState,
@@ -180,26 +138,6 @@ function rollbackToPreviousState(
     isSubmitting: false,
     submitErrorMessage,
   });
-}
-
-function parseLogicalDateString(logicalDate: string): Date {
-  const date = new Date(`${logicalDate}T00:00:00+09:00`);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error(`論理日付の形式が不正です: ${logicalDate}`);
-  }
-  return date;
-}
-
-function resolveLogicalTodayDate(logicalToday: string): Date {
-  if (logicalToday.length === 0) {
-    return getLogicalDate(new Date());
-  }
-
-  try {
-    return parseLogicalDateString(logicalToday);
-  } catch {
-    return getLogicalDate(new Date());
-  }
 }
 
 export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
@@ -309,20 +247,12 @@ export const useDashboardStore = create<DashboardStoreState>((set, get) => ({
         return { success: false, errorMessage: apiErrorMessage };
       }
 
-      if (typeof body !== "object" || body === null || !("transaction" in body)) {
-        const invalidResponseMessage =
-          "保存を完了できませんでした。通信状況を確認し、もう一度お試しください。";
+      const invalidResponseMessage = "保存を完了できませんでした。通信状況を確認し、もう一度お試しください。";
+      if (!isRecord(body) || !("transaction" in body) || !isDashboardTransaction(body.transaction)) {
         rollbackToPreviousState(set, previousState, invalidResponseMessage);
         return { success: false, errorMessage: invalidResponseMessage };
       }
-
       const rawTransaction = body.transaction;
-      if (!isDashboardTransaction(rawTransaction)) {
-        const invalidTransactionMessage =
-          "保存を完了できませんでした。通信状況を確認し、もう一度お試しください。";
-        rollbackToPreviousState(set, previousState, invalidTransactionMessage);
-        return { success: false, errorMessage: invalidTransactionMessage };
-      }
 
       const committedTransactions = get().transactions.map((transaction) =>
         transaction.id === optimisticTransaction.id ? { ...rawTransaction, isOptimistic: false } : transaction,

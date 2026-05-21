@@ -1,12 +1,11 @@
+/** ウェルカム完了フラグ（user_welcome）の読み書き。 */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { Result } from "@/lib/types/result";
 import type { Database, Tables } from "@/lib/types/database";
 
 type UserWelcomeRow = Tables<"user_welcome">;
-
-type Result<T, E = Error> =
-  | { success: true; data: T }
-  | { success: false; error: E };
 
 const USER_WELCOME_SELECT = "user_id,completed_at";
 

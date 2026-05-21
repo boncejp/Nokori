@@ -1,3 +1,8 @@
+/**
+ * ダッシュボード表示前のサイクル解決。
+ * 給料日リセット・初回サイクル締めの副作用と、残りサイクル予算の再計算を行う。
+ */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { subDays } from "date-fns";
 
@@ -18,13 +23,10 @@ import {
 } from "@/lib/logic/budget-logic";
 import { applyMonthlyResetForLogicalDate, fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { listTransactionsByLogicalDateRange } from "@/lib/supabase/transactions";
+import type { Result } from "@/lib/types/result";
 import type { Database, Tables } from "@/lib/types/database";
 
 type Profile = Tables<"profiles">;
-
-type Result<T, E = Error> =
-  | { readonly success: true; readonly data: T }
-  | { readonly success: false; readonly error: E };
 
 export type ResolvedDashboardCycle = {
   readonly profile: Profile;

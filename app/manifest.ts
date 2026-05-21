@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { NOKORI_APP_ICON_PATH } from "@/lib/brand";
+import { NOKORI_APP_ICON_PATH } from "@/lib/constants/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {

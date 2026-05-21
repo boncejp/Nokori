@@ -1,3 +1,8 @@
+/**
+ * ダッシュボード・設定プレビュー共通の「今日の残り / 翌日以降」メトリクス算出。
+ * 初回サイクルでは光熱費差額を当日残りに載せない（要件 §2.3）。
+ */
+
 import {
   applyUtilityDeltaToRemainingBudget,
   calculateDailyBudgetFuture,

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/logic/money-input-format";
 
 const MAX_DIGITS = 15;
 

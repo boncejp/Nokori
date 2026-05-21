@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { NOKORI_APP_ICON_PATH } from "@/lib/brand";
+import { NOKORI_APP_ICON_PATH } from "@/lib/constants/brand";
 
 import "./globals.css";
 

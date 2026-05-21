@@ -1,10 +1,15 @@
 import { isWithinFirstCycle, parseJstDateKeyToDate } from "@/lib/logic/budget-logic";
+import {
+  PAYDAY_RULE_VALUES,
+  SURPLUS_MODE_VALUES,
+  type PaydayRule,
+  type SurplusMode,
+} from "@/lib/types/domain";
+import { isRecord } from "@/lib/types/object-parsing";
+import type { ValidationResult } from "@/lib/types/result";
 
-export const PAYDAY_RULE_VALUES = ["BEFORE", "AFTER", "FIXED"] as const;
-export const SURPLUS_MODE_VALUES = ["STRICT", "YUTORI"] as const;
-
-export type PaydayRule = (typeof PAYDAY_RULE_VALUES)[number];
-export type SurplusMode = (typeof SURPLUS_MODE_VALUES)[number];
+export { PAYDAY_RULE_VALUES, SURPLUS_MODE_VALUES };
+export type { PaydayRule, SurplusMode };
 
 export type OnboardingProfileInput = {
   readonly target_amount: number;
@@ -35,14 +40,6 @@ export type ProfileSettingsValidationContext = {
   /** 初回サイクルでは月収フィールドを出さないため、未送信時はこの値を採用する。 */
   readonly existingMonthlyIncome: number;
 };
-
-type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; errorMessage: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 function parseNumberField(
   source: Record<string, unknown>,
