@@ -5,41 +5,9 @@ import {
   getLogicalDate,
   toJstDateString,
 } from "@/lib/logic/budget-logic";
+import { validateSalaryCyclePayload } from "@/lib/logic/salary-cycle-validation";
 import { fetchProfileByUserId, updateOwnProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-type SalaryCyclePayload = {
-  readonly monthlyIncome: number;
-  readonly cycleStartLogicalDate: string;
-};
-
-type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; errorMessage: string };
-
-const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
-
-function validateSalaryCyclePayload(payload: unknown): ValidationResult<SalaryCyclePayload> {
-  if (typeof payload !== "object" || payload === null) {
-    return { success: false, errorMessage: "送信データの形式が不正です。" };
-  }
-  const record = payload as Record<string, unknown>;
-
-  if (typeof record.monthlyIncome !== "number" || !Number.isFinite(record.monthlyIncome)) {
-    return { success: false, errorMessage: "手取り給料を数値で入力してください。" };
-  }
-  const monthlyIncome = Math.floor(record.monthlyIncome);
-  if (monthlyIncome < 1) {
-    return { success: false, errorMessage: "手取り給料は1円以上で入力してください。" };
-  }
-
-  const rawCycle = record.cycleStartLogicalDate;
-  if (typeof rawCycle !== "string" || !DATE_KEY.test(rawCycle)) {
-    return { success: false, errorMessage: "サイクル開始日の形式が不正です。" };
-  }
-
-  return { success: true, data: { monthlyIncome, cycleStartLogicalDate: rawCycle } };
-}
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -84,7 +52,10 @@ export async function POST(request: Request) {
   }
 
   if (validationResult.data.cycleStartLogicalDate !== expectedCycleStartKey) {
-    return NextResponse.json({ errorMessage: "サイクル開始日が一致しません。画面を再読み込みしてください。" }, { status: 400 });
+    return NextResponse.json(
+      { errorMessage: "サイクル開始日が一致しません。画面を再読み込みしてください。" },
+      { status: 400 },
+    );
   }
 
   const updateResult = await updateOwnProfileByUserId(supabase, user.id, {

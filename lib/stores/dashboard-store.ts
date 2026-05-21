@@ -1,3 +1,10 @@
+/**
+ * ダッシュボードのクライアント状態（Zustand）。
+ *
+ * - サーバーが算出した `remainingCycleBudget` 等を hydrate する
+ * - 支出の楽観的追加・ロールバック・削除後のメトリクス再計算
+ * - 表示用の数値は `calculateDashboardCycleMetrics`（純粋関数）に委譲
+ */
 "use client";
 
 import { create } from "zustand";

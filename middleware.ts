@@ -5,6 +5,7 @@ import type { Database } from "@/lib/types/database";
 
 import { getPublicSupabaseConfig } from "@/lib/supabase/public-env";
 
+/** 全リクエストで Supabase セッション Cookie を同期（App Router 推奨パターン）。 */
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request,

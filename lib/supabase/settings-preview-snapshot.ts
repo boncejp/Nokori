@@ -1,3 +1,5 @@
+/** 設定画面プレビュー用: 当日取引・確定支出を DB から読み、クライアントシミュレーションの初期値にする。 */
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { subDays } from "date-fns";
 
@@ -12,13 +14,10 @@ import {
 } from "@/lib/logic/budget-logic";
 import type { DashboardPreviewTransaction } from "@/lib/logic/dashboard-cycle-metrics";
 import { listTransactionsByLogicalDate, listTransactionsByLogicalDateRange } from "@/lib/supabase/transactions";
+import type { Result } from "@/lib/types/result";
 import type { Database, Tables } from "@/lib/types/database";
 
 type Profile = Tables<"profiles">;
-
-type Result<T, E = Error> =
-  | { readonly success: true; readonly data: T }
-  | { readonly success: false; readonly error: E };
 
 export type SettingsPreviewSnapshot = {
   readonly logicalTodayKey: string;
