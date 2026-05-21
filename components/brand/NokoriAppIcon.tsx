@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { NOKORI_APP_ICON_PATH } from "@/lib/brand";
+import { NOKORI_APP_ICON_PATH } from "@/lib/constants/brand";
 
 type NokoriAppIconProps = Readonly<{
   size?: number;

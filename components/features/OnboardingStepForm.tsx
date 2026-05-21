@@ -8,7 +8,8 @@ import {
   SURPLUS_MODE_VALUES,
 } from "@/lib/logic/onboarding-validation";
 import { HelpTooltip } from "@/components/ui/HelpTooltip";
-import { formatDigitsWithCommas, toNumericOnly } from "@/lib/money-input-format";
+import { getErrorMessageFromResponseBody } from "@/lib/logic/api-response-parsing";
+import { formatDigitsWithCommas, toNumericOnly } from "@/lib/logic/money-input-format";
 
 type OnboardingFormValues = {
   target_amount: string;
@@ -389,21 +390,6 @@ function getMoneyFieldPlaceholder(fieldName: keyof OnboardingFormValues): string
     return "例: 140,000";
   }
   return undefined;
-}
-
-function getErrorMessageFromResponseBody(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-  if (!("errorMessage" in body)) {
-    return null;
-  }
-
-  const { errorMessage } = body;
-  if (typeof errorMessage !== "string") {
-    return null;
-  }
-  return errorMessage;
 }
 
 function isMoneyFieldName(fieldName: keyof OnboardingFormValues): boolean {

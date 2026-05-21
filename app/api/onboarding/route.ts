@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
-
+import { requireAuthenticatedUser } from "@/lib/api/auth";
+import {
+  apiServerErrorResponse,
+  apiSuccessResponse,
+  apiValidationErrorResponse,
+} from "@/lib/api/responses";
 import {
   calculateCycleWindow,
   calculateTargetDateFromDuration,
@@ -8,25 +12,18 @@ import {
 } from "@/lib/logic/budget-logic";
 import { validateOnboardingPayload } from "@/lib/logic/onboarding-validation";
 import { upsertOwnProfile } from "@/lib/supabase/profiles";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { errorMessage: "ログインが必要です。再度ログインしてください。" },
-      { status: 401 },
-    );
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.success) {
+    return authResult.response;
   }
+  const { supabase, user } = authResult.data;
 
   const rawBody: unknown = await request.json();
   const validationResult = validateOnboardingPayload(rawBody);
   if (!validationResult.success) {
-    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
+    return apiValidationErrorResponse(validationResult.errorMessage);
   }
 
   const logicalNow = getLogicalDate(new Date());
@@ -44,17 +41,24 @@ export async function POST(request: Request) {
   const cycleStartKey = toJstDateString(cycleWindow.cycleStartDate);
   const logicalTodayKey = toJstDateString(logicalNow);
   const targetDateKey = toJstDateString(targetDate);
+
+  // オンボ完了日が偶然「給料サイクル開始日」と一致するときは、
+  // 当日の給料日モーダルを再度出さないよう last_salary_cycle_logical_date を埋める。
   const lastSalaryCycleLogicalDate = logicalTodayKey === cycleStartKey ? cycleStartKey : null;
+
   const initialTotalAssets = validationResult.data.initial_total_assets;
   const initialBudget = validationResult.data.initial_budget;
+  // 要件 §2.2 の不変条件: オンボ初回保存時のみ `initial_total_assets - initial_budget` で初期化する。
+  // 設定 PATCH ではこの式を再適用しない（`resolveCurrentTotalSavingsForProfileSettingsUpdate` を参照）。
   const currentTotalSavingsFromOnboarding = initialTotalAssets - initialBudget;
 
-  const profileColumns = {
+  const upsertResult = await upsertOwnProfile(supabase, {
+    id: user.id,
     target_amount: validationResult.data.target_amount,
     target_duration_months: validationResult.data.target_duration_months,
     initial_total_assets: initialTotalAssets,
     current_total_savings: currentTotalSavingsFromOnboarding,
-    // オンボでは手取りを取らない。NOT NULL 列のため 0 を入れ、通常サイクル開始の給料日モーダルで実値を保存する。
+    // オンボでは手取りを取らない。NOT NULL 列のため 0 を入れ、給料日モーダルで実値を保存する。
     monthly_income: 0,
     payday: validationResult.data.payday,
     payday_rule: validationResult.data.payday_rule,
@@ -64,11 +68,6 @@ export async function POST(request: Request) {
     estimated_water: validationResult.data.estimated_water,
     surplus_mode: validationResult.data.surplus_mode,
     initial_budget: initialBudget,
-  };
-
-  const upsertResult = await upsertOwnProfile(supabase, {
-    id: user.id,
-    ...profileColumns,
     target_date: targetDateKey,
     target_anchor_logical_date: logicalTodayKey,
     last_salary_cycle_logical_date: lastSalaryCycleLogicalDate,
@@ -79,11 +78,8 @@ export async function POST(request: Request) {
       userId: user.id,
       message: upsertResult.error.message,
     });
-    return NextResponse.json(
-      { errorMessage: "設定の保存に失敗しました。時間をおいて再試行してください。" },
-      { status: 500 },
-    );
+    return apiServerErrorResponse("設定の保存に失敗しました。時間をおいて再試行してください。");
   }
 
-  return NextResponse.json({ success: true });
+  return apiSuccessResponse();
 }

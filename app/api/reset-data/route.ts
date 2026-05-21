@@ -1,7 +1,12 @@
-import { NextResponse } from "next/server";
-
+import { requireAuthenticatedUser } from "@/lib/api/auth";
+import {
+  apiServerErrorResponse,
+  apiSuccessResponse,
+  apiValidationErrorResponse,
+} from "@/lib/api/responses";
 import { resetOwnDataAtomically } from "@/lib/supabase/profiles";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isRecord } from "@/lib/types/object-parsing";
+import type { ValidationResult } from "@/lib/types/result";
 
 const REQUIRED_CONFIRM_TEXT = "RESET";
 
@@ -9,15 +14,11 @@ type ResetDataPayload = {
   readonly confirmText: string;
 };
 
-type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; errorMessage: string };
-
 function validateResetDataPayload(payload: unknown): ValidationResult<ResetDataPayload> {
-  if (typeof payload !== "object" || payload === null) {
+  if (!isRecord(payload)) {
     return { success: false, errorMessage: "送信データの形式が不正です。" };
   }
-  if (!("confirmText" in payload) || typeof payload.confirmText !== "string") {
+  if (typeof payload.confirmText !== "string") {
     return { success: false, errorMessage: "確認テキストを入力してください。" };
   }
   if (payload.confirmText !== REQUIRED_CONFIRM_TEXT) {
@@ -30,22 +31,16 @@ function validateResetDataPayload(payload: unknown): ValidationResult<ResetDataP
 }
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { errorMessage: "ログインが必要です。再度ログインしてください。" },
-      { status: 401 },
-    );
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.success) {
+    return authResult.response;
   }
+  const { supabase, user } = authResult.data;
 
   const rawBody: unknown = await request.json();
   const validationResult = validateResetDataPayload(rawBody);
   if (!validationResult.success) {
-    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
+    return apiValidationErrorResponse(validationResult.errorMessage);
   }
 
   const resetResult = await resetOwnDataAtomically(supabase);
@@ -54,17 +49,12 @@ export async function POST(request: Request) {
       userId: user.id,
       message: resetResult.error.message,
     });
-    return NextResponse.json(
-      {
-        errorMessage:
-          "データ初期化に失敗しました。全件ロールバック済みのため、時間をおいて再試行してください。",
-      },
-      { status: 500 },
+    return apiServerErrorResponse(
+      "データ初期化に失敗しました。全件ロールバック済みのため、時間をおいて再試行してください。",
     );
   }
 
-  return NextResponse.json({
-    success: true,
+  return apiSuccessResponse({
     deletedTransactionCount: resetResult.data.deletedTransactionCount,
     requiresOnboarding: true,
   });

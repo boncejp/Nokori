@@ -1,39 +1,35 @@
-import { NextResponse } from "next/server";
-
+import { requireAuthenticatedUser } from "@/lib/api/auth";
+import {
+  apiServerErrorResponse,
+  apiSuccessResponse,
+  apiValidationErrorResponse,
+} from "@/lib/api/responses";
 import { getLogicalDate, isWithinFirstCycle, parseJstDateKeyToDate } from "@/lib/logic/budget-logic";
 import { createTransactionPersistencePlan } from "@/lib/logic/transaction-persistence";
 import { validateTransactionPayload } from "@/lib/logic/transaction-validation";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   insertOwnSpecialTransactionAndDecrementSavings,
   insertOwnTransaction,
 } from "@/lib/supabase/transactions";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { errorMessage: "ログインが必要です。再度ログインしてください。" },
-      { status: 401 },
-    );
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.success) {
+    return authResult.response;
   }
+  const { supabase, user } = authResult.data;
 
   const rawBody: unknown = await request.json();
   const validationResult = validateTransactionPayload(rawBody);
   if (!validationResult.success) {
-    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
+    return apiValidationErrorResponse(validationResult.errorMessage);
   }
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
-    return NextResponse.json(
-      { errorMessage: "プロフィールが見つかりません。初期設定を完了してください。" },
-      { status: 400 },
+    return apiValidationErrorResponse(
+      "プロフィールが見つかりません。初期設定を完了してください。",
     );
   }
 
@@ -50,13 +46,14 @@ export async function POST(request: Request) {
     utilityType: validationResult.data.utilityType,
   });
 
-  if (inFirstCycle && (persistencePlan.shouldUseSpecialAtomicMutation || persistencePlan.utilityType !== null)) {
-    return NextResponse.json(
-      {
-        errorMessage:
-          "初回サイクルでは「普通支出」のみ登録できます。光熱費と特別支出は、次の給料日以降の通常サイクルから利用できます。",
-      },
-      { status: 400 },
+  // 初回サイクルでは普通支出のみを許可（要件 §2.3 / 設計 §2.2）。
+  // 光熱費差額の反映と特別支出の貯金引き出しは通常サイクルからの機能のため、ここで弾く。
+  const isRestrictedInFirstCycle =
+    inFirstCycle &&
+    (persistencePlan.shouldUseSpecialAtomicMutation || persistencePlan.utilityType !== null);
+  if (isRestrictedInFirstCycle) {
+    return apiValidationErrorResponse(
+      "初回サイクルでは「普通支出」のみ登録できます。光熱費と特別支出は、次の給料日以降の通常サイクルから利用できます。",
     );
   }
 
@@ -76,11 +73,8 @@ export async function POST(request: Request) {
     const errorMessage = persistencePlan.shouldUseSpecialAtomicMutation
       ? "特別支出の保存に失敗しました。時間をおいて再試行してください。"
       : "支出の保存に失敗しました。時間をおいて再試行してください。";
-    return NextResponse.json({ errorMessage }, { status: 500 });
+    return apiServerErrorResponse(errorMessage);
   }
 
-  return NextResponse.json({
-    success: true,
-    transaction: insertResult.data,
-  });
+  return apiSuccessResponse({ transaction: insertResult.data });
 }

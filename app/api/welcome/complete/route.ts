@@ -1,20 +1,13 @@
-import { NextResponse } from "next/server";
-
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireAuthenticatedUser } from "@/lib/api/auth";
+import { apiServerErrorResponse, apiSuccessResponse } from "@/lib/api/responses";
 import { upsertUserWelcomeCompleted } from "@/lib/supabase/user-welcome";
 
 export async function POST() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { errorMessage: "ログインが必要です。再度ログインしてください。" },
-      { status: 401 },
-    );
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.success) {
+    return authResult.response;
   }
+  const { supabase, user } = authResult.data;
 
   const upsertResult = await upsertUserWelcomeCompleted(supabase, user.id);
   if (!upsertResult.success) {
@@ -22,11 +15,8 @@ export async function POST() {
       userId: user.id,
       message: upsertResult.error.message,
     });
-    return NextResponse.json(
-      { errorMessage: "保存に失敗しました。時間をおいて再試行してください。" },
-      { status: 500 },
-    );
+    return apiServerErrorResponse("保存に失敗しました。時間をおいて再試行してください。");
   }
 
-  return NextResponse.json({ success: true });
+  return apiSuccessResponse();
 }

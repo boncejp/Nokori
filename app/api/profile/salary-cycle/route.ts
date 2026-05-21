@@ -1,5 +1,9 @@
-import { NextResponse } from "next/server";
-
+import { requireAuthenticatedUser } from "@/lib/api/auth";
+import {
+  apiServerErrorResponse,
+  apiSuccessResponse,
+  apiValidationErrorResponse,
+} from "@/lib/api/responses";
 import {
   calculateCycleWindow,
   getLogicalDate,
@@ -7,32 +11,24 @@ import {
 } from "@/lib/logic/budget-logic";
 import { validateSalaryCyclePayload } from "@/lib/logic/salary-cycle-validation";
 import { fetchProfileByUserId, updateOwnProfileByUserId } from "@/lib/supabase/profiles";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json(
-      { errorMessage: "ログインが必要です。再度ログインしてください。" },
-      { status: 401 },
-    );
+  const authResult = await requireAuthenticatedUser();
+  if (!authResult.success) {
+    return authResult.response;
   }
+  const { supabase, user } = authResult.data;
 
   const rawBody: unknown = await request.json();
   const validationResult = validateSalaryCyclePayload(rawBody);
   if (!validationResult.success) {
-    return NextResponse.json({ errorMessage: validationResult.errorMessage }, { status: 400 });
+    return apiValidationErrorResponse(validationResult.errorMessage);
   }
 
   const profileResult = await fetchProfileByUserId(supabase, user.id);
   if (!profileResult.success) {
-    return NextResponse.json(
-      { errorMessage: "プロフィールが見つかりません。オンボーディングを完了してください。" },
-      { status: 400 },
+    return apiValidationErrorResponse(
+      "プロフィールが見つかりません。オンボーディングを完了してください。",
     );
   }
 
@@ -47,14 +43,14 @@ export async function POST(request: Request) {
   });
   const expectedCycleStartKey = toJstDateString(cycleWindow.cycleStartDate);
 
+  // 給料日モーダルは「給料サイクル開始日（=その日が論理的な給料日）」だけ受け付ける。
+  // 別の日に更新できると、月内に複数回の更新が走り `last_salary_cycle_logical_date` の整合が崩れるため。
   if (logicalTodayKey !== expectedCycleStartKey) {
-    return NextResponse.json({ errorMessage: "今日は給料サイクル開始日ではありません。" }, { status: 400 });
+    return apiValidationErrorResponse("今日は給料サイクル開始日ではありません。");
   }
-
   if (validationResult.data.cycleStartLogicalDate !== expectedCycleStartKey) {
-    return NextResponse.json(
-      { errorMessage: "サイクル開始日が一致しません。画面を再読み込みしてください。" },
-      { status: 400 },
+    return apiValidationErrorResponse(
+      "サイクル開始日が一致しません。画面を再読み込みしてください。",
     );
   }
 
@@ -64,11 +60,8 @@ export async function POST(request: Request) {
   });
 
   if (!updateResult.success) {
-    return NextResponse.json(
-      { errorMessage: "保存に失敗しました。時間をおいて再試行してください。" },
-      { status: 500 },
-    );
+    return apiServerErrorResponse("保存に失敗しました。時間をおいて再試行してください。");
   }
 
-  return NextResponse.json({ success: true, profile: updateResult.data });
+  return apiSuccessResponse({ profile: updateResult.data });
 }
