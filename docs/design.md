@@ -121,7 +121,8 @@ MVP の本番は **Vercel を第一選択**とし、必ずしもこの Docker �
 
 ### 3.2 認証・OAuth 運用メモ
 
-- **プロバイダ:** Supabase Auth で **Google** を有効化する前提（ダッシュボード **Authentication → Providers**）。
+- **プロバイダ（MVP）:** Supabase Auth で **Google** のみを有効化する（ダッシュボード **Authentication → Providers**）。**Email**（マジックリンク / OTP）はアプリから提供しないため **無効化** する。クラウドの既定メール送信には厳しいレート制限があり、本番 UX を損ねるため。
+- **メール認証の再導入（将来）:** 独自ドメイン取得後、Resend / SendGrid 等の **Custom SMTP** を Supabase に設定し、Email プロバイダを再有効化する。アプリは `/auth/callback` の PKCE（`code`）フローをそのまま利用できる想定（`signInWithOtp` の UI をログイン画面に戻す）。
 - **Supabase 側 URL:** **Authentication → URL Configuration** で **Site URL**（本番アプリのオリジン）と **Redirect URLs**（ログイン後に許可するオリジン一覧）を登録する。ここに無いオリジンからの OAuth は失敗する。
 - **登録例（Redirect URLs に含める想定のパターン）**
   - ローカル: `http://localhost:3000/**` や、アプリ実装に合わせたコールバックパス（例: `http://localhost:3000/auth/callback` など。実際のルートに合わせる）。

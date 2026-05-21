@@ -17,10 +17,9 @@ export const AUTH_STATE_PATH = path.join(__dirname, ".auth/user.json");
  * 5. アプリのページを開いてミドルウェアがセッションを認識することを確認
  * 6. storageState に保存
  *
- * なぜマジックリンク方式をやめたか:
- *   admin.generateLink が返す URL は #access_token=... 形式（implicit grant）で
- *   ハッシュフラグメントはサーバーに届かないため /auth/callback で処理できない。
- *   代わりに Node.js 内で完結する signInWithPassword を使う。
+ * 認証方式:
+ *   本番ログインは Google OAuth のみ。E2E は Admin API + signInWithPassword でセッションを作る
+ *   （マジックリンクの #access_token はサーバーに届かず /auth/callback で処理できないため）。
  */
 setup("テストユーザーを認証する", async ({ context }) => {
   const email = process.env.E2E_TEST_EMAIL;

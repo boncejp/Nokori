@@ -61,9 +61,8 @@ async function ensureTestUserWithEphemeralPassword(
 /**
  * signInWithPassword を Node.js 側で実行し、@supabase/ssr が設定するクッキーを返す。
  *
- * マジックリンク方式はハッシュフラグメント（#access_token=...）を返すため
- * サーバーサイドの /auth/callback では処理できない。
- * 代わりに createServerClient + モッククッキーストアで完結させる。
+ * 本番は Google OAuth のみ。E2E 用に Admin API でパスワードを設定し、
+ * createServerClient + モッククッキーストアで signInWithPassword を完結させる。
  */
 export async function signInAndCaptureCookies(params: {
   readonly email: string;
