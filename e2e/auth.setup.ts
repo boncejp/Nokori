@@ -10,16 +10,16 @@ export const AUTH_STATE_PATH = path.join(__dirname, ".auth/user.json");
  * テストユーザーを認証し、Playwright のストレージ状態に保存する。
  *
  * 認証フロー:
- * 1. Admin API でテストユーザーを作成（または既存ユーザーのパスワードを一時更新）
- * 2. Node.js 側で createServerClient + signInWithPassword を実行
+ * 1. Admin API でテストユーザーを確保
+ * 2. Admin generateLink（magiclink）で token_hash を取得し、verifyOtp でセッション確立
  * 3. @supabase/ssr がモッククッキーストアに書き込んだセッションクッキーを取得
  * 4. Playwright のブラウザコンテキストに注入
  * 5. アプリのページを開いてミドルウェアがセッションを認識することを確認
  * 6. storageState に保存
  *
  * 認証方式:
- *   本番ログインは Google OAuth のみ。E2E は Admin API + signInWithPassword でセッションを作る
- *   （マジックリンクの #access_token はサーバーに届かず /auth/callback で処理できないため）。
+ *   本番ログインは Google OAuth のみ（Email プロバイダ無効）。E2E は Admin generateLink + verifyOtp。
+ *   signInWithPassword は Email logins are disabled で失敗する。
  */
 setup("テストユーザーを認証する", async ({ context }) => {
   const email = process.env.E2E_TEST_EMAIL;
