@@ -23,7 +23,7 @@ export default function PrivacyPage() {
         <ul className="list-disc space-y-2 pl-5">
           <li>
             <strong className="font-medium text-slate-800">認証情報</strong>
-            ：メールアドレス、Google アカウントを通じて認証プロバイダが提供する識別子等（Supabase Auth を通じて処理されます）。
+            ：Google アカウントを通じて認証プロバイダが提供する識別子、メールアドレス等（Supabase Auth を通じて処理されます）。ログインは Google OAuth のみを提供します。
           </li>
           <li>
             <strong className="font-medium text-slate-800">アプリ利用データ</strong>

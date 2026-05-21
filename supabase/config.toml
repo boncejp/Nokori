@@ -215,6 +215,7 @@ web3 = 30
 # secret = ""
 
 [auth.email]
+# MVP は Google OAuth のみ（アプリにメールログイン UI なし）。クラウドでは Authentication → Providers で Email を無効化すること。
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email

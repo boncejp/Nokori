@@ -147,9 +147,9 @@
 
 ### 3.1 認証・初期設定（オンボーディング）
 
-**認証:** Google OAuth / Email 認証（Supabase Auth）。
+**認証:** Google OAuth（Supabase Auth）。MVP ではメール（マジックリンク）認証は提供しない（Supabase 既定のメール送信レート制限による UX 低下を避けるため）。独自ドメイン取得後に外部 SMTP と Supabase Custom SMTP を連携したうえで、メール認証の再導入を検討する。
 
-開発・本番では、**クラウド上の Supabase プロジェクト**において Auth の有効化（Google 等の OAuth プロバイダ）および **Site URL / Redirect URLs** の登録が必要になる。具体的な URL の組み合わせや Google Cloud Console 側の設定は `docs/design.md`（認証・OAuth 運用メモ）に委ねる。
+開発・本番では、**クラウド上の Supabase プロジェクト**において **Google** プロバイダの有効化、**Email プロバイダの無効化**、および **Site URL / Redirect URLs** の登録が必要になる。具体的な URL の組み合わせや Google Cloud Console 側の設定は `docs/design.md`（認証・OAuth 運用メモ）に委ねる。
 
 **初期設定フロー（ステップ順）:**
 

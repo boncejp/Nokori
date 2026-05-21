@@ -27,7 +27,7 @@ copy .env.example .env
 
 4. 各変数の**意味と取得元**は `docs/design.md` の **§3.3.1（環境変数一覧）** に従って `.env` に設定します。本番・プレビューでは Vercel の **Project Settings → Environment Variables** に同じ名前で登録します。**GitHub の Issue・PR・コミットに実キーや本番 URL を書かないでください。**
 
-5. **Google OAuth** を使う場合は、Supabase 側で Google プロバイダを有効化し、**Authentication → URL Configuration** で Site URL / Redirect URLs、および Google Cloud Console の OAuth クライアント設定を整えます。具体例とハマりどころは `docs/design.md` の「認証・OAuth 運用メモ」を参照してください。
+5. **ログイン（Google OAuth）:** Supabase で **Google** プロバイダを有効化し、**Email** プロバイダは無効化します（MVP は Google のみ。理由は `docs/design.md` §3.2）。**Authentication → URL Configuration** で Site URL / Redirect URLs、および Google Cloud Console の OAuth クライアント設定を整えます。具体例とハマりどころは `docs/design.md` の「認証・OAuth 運用メモ」を参照してください。
 
 6. リポジトリに `supabase/` が含まれていることを確認し、未初期化の場合のみ次を実行します。
 

@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <NokoriAppIcon size={72} priority className="rounded-2xl shadow-sm ring-1 ring-nokori-border/80" />
         <div className="w-full space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-nokori-navy">Nokori にログイン</h1>
-          <p className="text-sm text-nokori-muted">メールアドレスまたは Googleアカウントでログインできます。</p>
+          <p className="text-sm text-nokori-muted">Googleアカウントでログインできます。</p>
         </div>
       </div>
       <LoginForm authErrorFromCallback={authErrorFromCallback} />

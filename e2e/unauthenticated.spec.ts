@@ -21,6 +21,11 @@ for (const protectedPath of PROTECTED_PATHS) {
 test("ログインページは未認証でも表示される", async ({ page }) => {
   await page.goto("/login");
   await expect(page).toHaveURL(/\/login/);
-  // ページが正常に描画されていることを確認（エラー UI が出ていない）
-  await expect(page.locator("body")).not.toBeEmpty();
+  await expect(page.getByRole("button", { name: "Googleでログイン" })).toBeVisible();
+});
+
+test("ログインページにメールログイン用の入力欄は表示されない", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /メール/ })).toHaveCount(0);
 });
