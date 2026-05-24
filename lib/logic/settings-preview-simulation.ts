@@ -5,6 +5,7 @@ import {
   calculateNormalCycleDailyProrationDayCounts,
   calculateNextRemainingCycleBudget,
   calculateTargetDateFromDuration,
+  shouldMaskFutureDailyBudgetDisplay,
   type PaydayRule,
   type SurplusMode,
   type UtilityEstimateMap,
@@ -44,6 +45,7 @@ export type SettingsBudgetPreviewResult =
       readonly previewKind: "first";
       readonly dailyBudgetToday: number;
       readonly futureDailyBudget: number;
+      readonly maskFutureDailyBudget: boolean;
     }
   | {
       readonly status: "ok";
@@ -51,6 +53,7 @@ export type SettingsBudgetPreviewResult =
       readonly dailyBudgetToday: number;
       readonly futureDailyBudget: number;
       readonly monthlySavingsQuota: number;
+      readonly maskFutureDailyBudget: boolean;
     }
   | { readonly status: "unavailable" };
 
@@ -101,6 +104,9 @@ export function calculateSettingsBudgetPreview(params: {
         previewKind: "first",
         dailyBudgetToday: metrics.dailyBudgetToday,
         futureDailyBudget: metrics.futureDailyBudget,
+        maskFutureDailyBudget: shouldMaskFutureDailyBudgetDisplay({
+          daysUntilNextPaydayExcludingToday,
+        }),
       };
     } catch {
       return { status: "unavailable" };
@@ -189,6 +195,9 @@ export function calculateSettingsBudgetPreview(params: {
       dailyBudgetToday: metrics.dailyBudgetToday,
       futureDailyBudget: metrics.futureDailyBudget,
       monthlySavingsQuota,
+      maskFutureDailyBudget: shouldMaskFutureDailyBudgetDisplay({
+        daysUntilNextPaydayExcludingToday,
+      }),
     };
   } catch {
     return { status: "unavailable" };

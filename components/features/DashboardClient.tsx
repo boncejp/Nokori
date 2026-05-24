@@ -152,7 +152,7 @@ export function DashboardClient({
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
           <MetricCard label="当日の目安予算" value={formatCurrency(dailyBudgetToday)} />
           <MetricCard
-            label="翌日以降の目安（1日あたり）"
+            label="翌日以降の目安予算（1日あたり）"
             value={futureDailyBudgetDisplay}
             hint={
               maskFutureDailyBudget
@@ -296,13 +296,15 @@ function FirstCycleNotice() {
       <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-nokori-navy">
         初回サイクルについて
       </summary>
-      <ul className="mt-2 list-inside list-disc space-y-1.5 pb-3 text-nokori-muted">
-        <li>初回サイクルでは、「次の給料日まで使う予算」を「普通支出」としてのみ管理します。</li>
-        <li>光熱費と特別支出の詳細管理は、次の給料日以降の通常サイクルから利用できます。</li>
-        <li>
-          通常サイクルでは、光熱費は概算との差額を残り予算へ反映し、特別支出は貯金総額から直接差し引いて月次貯金ノルマを再計算します。
-        </li>
-      </ul>
+      <div className="mt-2 space-y-2 pb-3 text-nokori-muted">
+        <p>
+          初回サイクルでは「次の給料日まで使う予算」と、ユーザが登録した「普通支出」から日次の目安予算を計算しますが、通常サイクルでは普通支出に加えて選択できる支出種別が増えます。
+        </p>
+        <ul className="list-inside list-disc space-y-1.5">
+          <li>光熱費：ユーザが登録した支出金額と概算の差額を残り予算へ反映します。</li>
+          <li>特別支出：貯金総額から直接差し引いて翌月以降の月次貯金ノルマを再計算します。</li>
+        </ul>
+      </div>
     </details>
   );
 }

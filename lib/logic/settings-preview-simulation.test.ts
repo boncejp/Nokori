@@ -371,4 +371,40 @@ describe("calculateSettingsBudgetPreview", () => {
     baseSpy.mockRestore();
     quotaSpy.mockRestore();
   });
+
+  it("サイクル最終日（daysExcludingToday = 0）では maskFutureDailyBudget が true", () => {
+    const logicalToday = budgetLogic.parseJstDateKeyToDate("2026-05-12");
+    const anchorLogicalDate = budgetLogic.parseJstDateKeyToDate("2026-05-01");
+
+    const firstCycleLastDay = calculateSettingsBudgetPreview({
+      previewKind: "first",
+      logicalToday,
+      anchorLogicalDate,
+      currentTotalSavingsDb: 400_000,
+      snapshot: { ...EMPTY_SNAPSHOT, confirmedNormalSpentBeforeToday: 0 },
+      firstCycleCalendar: {
+        daysUntilNextPaydayIncludingToday: 1,
+        daysUntilNextPaydayExcludingToday: 0,
+      },
+      draft: {
+        targetAmount: 2_000_000,
+        targetDurationMonths: 12,
+        monthlyIncome: 350_000,
+        payday: 25,
+        paydayRule: "FIXED",
+        fixedCosts: 120_000,
+        estimatedElectricity: 5_000,
+        estimatedGas: 5_000,
+        estimatedWater: 5_000,
+        surplusMode: "STRICT",
+        initialBudget: 50_000,
+      },
+    });
+
+    expect(firstCycleLastDay.status).toBe("ok");
+    if (firstCycleLastDay.status !== "ok") {
+      return;
+    }
+    expect(firstCycleLastDay.maskFutureDailyBudget).toBe(true);
+  });
 });

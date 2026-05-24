@@ -248,11 +248,12 @@ export function HistoryClient({
         <div className="rounded-lg border border-nokori-border bg-nokori-subtle/60 p-4">
           <p className="text-xs text-nokori-muted">このサイクル内の支出の合計</p>
           <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(cycleExpenseTotal)}</p>
-          {cycleTransactionTotalCount > transactions.length ? (
-            <p className="mt-1 text-xs text-nokori-muted">
-              一覧は新しい順に{transactions.length}件を表示（全{cycleTransactionTotalCount}件）
-            </p>
-          ) : null}
+          <p className="mt-1 text-xs text-nokori-muted">
+            表示中: {transactions.length}件
+            {cycleTransactionTotalCount > transactions.length
+              ? `（全${cycleTransactionTotalCount}件・新しい順）`
+              : "（新しい順）"}
+          </p>
         </div>
       ) : null}
 
