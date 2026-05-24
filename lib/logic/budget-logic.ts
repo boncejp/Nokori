@@ -37,6 +37,11 @@ export {
 } from "@/lib/logic/budget/daily-budget";
 
 export {
+  FUTURE_DAILY_BUDGET_MASKED_LABEL,
+  shouldMaskFutureDailyBudgetDisplay,
+} from "@/lib/logic/budget/future-daily-budget-display";
+
+export {
   applyUtilityDeltaToRemainingBudget,
   calculateUtilityBudgetDelta,
 } from "@/lib/logic/budget/utility-budget";

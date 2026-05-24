@@ -85,6 +85,7 @@ export function SettingsFormFieldGrid(props: {
           onChange={handleChange}
           thousands
           placeholder="例: 300,000"
+          helperText="このサイクルで使う手取りの目安です。ボーナスなど臨時収入がある月は、ここに含めた合計額を入力してください。"
         />
       )}
       <NumberField

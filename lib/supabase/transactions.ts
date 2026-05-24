@@ -81,8 +81,8 @@ export async function listTransactionsByLogicalDateRange(
     .select(TRANSACTION_SELECT_COLUMNS)
     .gte("logical_date", fromLogicalDateString)
     .lte("logical_date", toLogicalDateString)
-    .order("logical_date", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("logical_date", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (error) {
     return { success: false, error: new Error(error.message) };

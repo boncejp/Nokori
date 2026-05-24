@@ -11,6 +11,10 @@ import {
   UTILITY_TYPE_OPTIONS,
   type TransactionKind,
 } from "./dashboard/DashboardExpenseSegments";
+import {
+  FUTURE_DAILY_BUDGET_MASKED_LABEL,
+  shouldMaskFutureDailyBudgetDisplay,
+} from "@/lib/logic/budget-logic";
 import { toNumericOnly } from "@/lib/logic/money-input-format";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 import type { UtilityType } from "@/lib/types/domain";
@@ -59,6 +63,9 @@ export function DashboardClient({
   const remainingToday = useDashboardStore((state) => state.remainingToday);
   const dailyBudgetToday = useDashboardStore((state) => state.dailyBudgetToday);
   const futureDailyBudget = useDashboardStore((state) => state.futureDailyBudget);
+  const daysUntilNextPaydayExcludingToday = useDashboardStore(
+    (state) => state.daysUntilNextPaydayExcludingToday,
+  );
   const todaySpentTotal = useDashboardStore((state) => state.todaySpentTotal);
   const isSubmitting = useDashboardStore((state) => state.isSubmitting);
   const submitErrorMessage = useDashboardStore((state) => state.submitErrorMessage);
@@ -72,6 +79,13 @@ export function DashboardClient({
   const [kindInput, setKindInput] = useState<TransactionKind>("NORMAL");
   const [utilityTypeInput, setUtilityTypeInput] = useState<UtilityType>("ELECTRICITY");
   const [formErrorMessage, setFormErrorMessage] = useState("");
+
+  const maskFutureDailyBudget = shouldMaskFutureDailyBudgetDisplay({
+    daysUntilNextPaydayExcludingToday,
+  });
+  const futureDailyBudgetDisplay = maskFutureDailyBudget
+    ? FUTURE_DAILY_BUDGET_MASKED_LABEL
+    : formatCurrency(futureDailyBudget);
 
   useEffect(() => {
     hydrate(initialState);
@@ -137,7 +151,15 @@ export function DashboardClient({
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
           <MetricCard label="当日の目安予算" value={formatCurrency(dailyBudgetToday)} />
-          <MetricCard label="翌日以降の目安（1日あたり）" value={formatCurrency(futureDailyBudget)} />
+          <MetricCard
+            label="翌日以降の目安（1日あたり）"
+            value={futureDailyBudgetDisplay}
+            hint={
+              maskFutureDailyBudget
+                ? "サイクル最終日のため、翌日以降の日割りは給料日に手取りを入力すると表示されます。"
+                : undefined
+            }
+          />
           <MetricCard label="今日の支出合計" value={formatCurrency(todaySpentTotal)} />
         </div>
 
@@ -285,11 +307,20 @@ function FirstCycleNotice() {
   );
 }
 
-function MetricCard({ label, value }: { readonly label: string; readonly value: string }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly hint?: string;
+}) {
   return (
     <div className="rounded-lg border border-nokori-border bg-nokori-surface p-3 shadow-sm">
       <p className="text-xs text-nokori-muted">{label}</p>
       <p className="mt-1 text-lg font-semibold text-nokori-navy">{value}</p>
+      {hint ? <p className="mt-1.5 text-[11px] leading-snug text-nokori-muted">{hint}</p> : null}
     </div>
   );
 }

@@ -30,12 +30,14 @@ export function NumberField<TName extends string>({
   max,
   thousands = false,
   placeholder,
+  helperText,
 }: BaseFieldProps<TName> & {
   readonly min?: number;
   readonly max?: number;
   /** true なら表示時に千区切りを適用し、保存値は数字のみへ正規化する */
   readonly thousands?: boolean;
   readonly placeholder?: string;
+  readonly helperText?: string;
 }) {
   const fieldId = `settings-field-${name}`;
   const displayValue = thousands ? formatDigitsWithCommas(value) : value;
@@ -54,6 +56,7 @@ export function NumberField<TName extends string>({
         onChange={(event) => onChange(name, thousands ? toNumericOnly(event.target.value) : event.target.value)}
         className="min-h-11 rounded-md border border-nokori-border bg-nokori-surface px-3 py-2.5 text-base text-nokori-text shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nokori-navy/30 sm:text-sm"
       />
+      {helperText ? <p className="text-xs leading-relaxed text-nokori-muted">{helperText}</p> : null}
     </div>
   );
 }
