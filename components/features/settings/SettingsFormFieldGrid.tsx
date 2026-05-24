@@ -172,6 +172,7 @@ export function SettingsFormFieldGrid(props: {
           onChange={handleChange}
           thousands
           placeholder="例: 100,000"
+          helperText="この期間に使う生活費の総額。ボーナスなど臨時収入がある場合は含めた合計を入力。途中で入った場合はここを更新"
         />
       ) : null}
     </div>
