@@ -16,11 +16,11 @@ export function validateSalaryCyclePayload(payload: unknown): ValidationResult<S
   }
 
   if (typeof payload.monthlyIncome !== "number" || !Number.isFinite(payload.monthlyIncome)) {
-    return { success: false, errorMessage: "手取り給料を数値で入力してください。" };
+    return { success: false, errorMessage: "手取り額を数値で入力してください。" };
   }
   const monthlyIncome = Math.floor(payload.monthlyIncome);
   if (monthlyIncome < 1) {
-    return { success: false, errorMessage: "手取り給料は1円以上で入力してください。" };
+    return { success: false, errorMessage: "手取り額は1円以上で入力してください。" };
   }
 
   if (!isLogicalDateKey(payload.cycleStartLogicalDate)) {

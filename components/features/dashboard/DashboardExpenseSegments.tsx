@@ -18,7 +18,7 @@ export const TRANSACTION_KIND_OPTIONS: readonly TransactionKindOption[] = [
     value: "NORMAL",
     label: "普通支出",
     shortLabel: "普通",
-    tooltip: "今日の日次予算と、翌日以降の1日あたりの目安から差し引く普段の支出として扱います。",
+    tooltip: "今日の残り予算と、翌日以降の目安予算（1日あたり）から差し引く普段の支出として扱います。",
     helpAria: "普通支出が予算に与える影響の説明",
   },
   {

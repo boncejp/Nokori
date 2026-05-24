@@ -250,12 +250,12 @@ export function validateProfileSettingsPayload(
     if (isMissing) {
       monthlyIncome = context.existingMonthlyIncome;
     } else {
-      const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+      const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り額）");
       if (!monthlyIncomeResult.success) return monthlyIncomeResult;
       monthlyIncome = monthlyIncomeResult.data;
     }
   } else {
-    const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り概算）");
+    const monthlyIncomeResult = parseNumberField(rawPayload, "monthly_income", "月収（手取り額）");
     if (!monthlyIncomeResult.success) return monthlyIncomeResult;
     monthlyIncome = monthlyIncomeResult.data;
   }

@@ -102,7 +102,9 @@ export default async function DashboardPage() {
   const paydayCycleStartKey = toJstDateString(paydayPromptCycleWindow.cycleStartDate);
   const isLogicalCycleStartPayday = logicalTodayString === paydayCycleStartKey;
   const salaryPrompt =
-    isLogicalCycleStartPayday && profile.last_salary_cycle_logical_date !== paydayCycleStartKey
+    !resolvedCycle.isFirstCycle &&
+    isLogicalCycleStartPayday &&
+    profile.last_salary_cycle_logical_date !== paydayCycleStartKey
       ? {
           cycleStartLogicalDate: paydayCycleStartKey,
           currentMonthlyIncome: profile.monthly_income,

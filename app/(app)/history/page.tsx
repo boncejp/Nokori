@@ -13,7 +13,13 @@ import { resolvePostAuthLandingPath } from "@/lib/routing/post-auth-landing";
 import { resolveDashboardCycle } from "@/lib/supabase/dashboard-cycle-resolve";
 import { fetchProfileByUserId } from "@/lib/supabase/profiles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { listTransactionsByLogicalDate, listTransactionsByLogicalDateRange } from "@/lib/supabase/transactions";
+import { HISTORY_CYCLE_LIST_PAGE_SIZE } from "@/lib/constants/history";
+import {
+  countTransactionsByLogicalDateRange,
+  listTransactionsByLogicalDate,
+  listTransactionsByLogicalDateRange,
+  sumTransactionAmountsByLogicalDateRange,
+} from "@/lib/supabase/transactions";
 
 function formatJapaneseLogicalDateLabel(dateKey: string): string {
   const parts = dateKey.split("-");
@@ -111,16 +117,32 @@ export default async function HistoryPage() {
     paydayRule: profile.payday_rule,
     isFirstCycle: resolvedCycle.isFirstCycle,
   });
-  const cycleTransactionsResult = await listTransactionsByLogicalDateRange(supabase, {
+  const cycleRangeParams = {
     fromLogicalDate: historyLogicalRange.from,
     toLogicalDate: historyLogicalRange.to,
-  });
+  };
+  const [cycleTransactionsResult, cycleCountResult, cycleSumResult] = await Promise.all([
+    listTransactionsByLogicalDateRange(supabase, {
+      ...cycleRangeParams,
+      limit: HISTORY_CYCLE_LIST_PAGE_SIZE,
+      offset: 0,
+    }),
+    countTransactionsByLogicalDateRange(supabase, cycleRangeParams),
+    sumTransactionAmountsByLogicalDateRange(supabase, cycleRangeParams),
+  ]);
 
   const dashboardTransactions = todayTransactionsResult.success ? todayTransactionsResult.data : [];
   const cycleTransactions = cycleTransactionsResult.success ? cycleTransactionsResult.data : [];
-  const initialHistoryErrorMessage = cycleTransactionsResult.success
-    ? null
-    : "このサイクルの支出一覧を読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
+  const cycleTransactionTotalCount = cycleCountResult.success ? cycleCountResult.data : 0;
+  const cycleExpenseTotal = cycleSumResult.success ? cycleSumResult.data : 0;
+  const initialHistoryErrorMessage =
+    cycleTransactionsResult.success && cycleCountResult.success && cycleSumResult.success
+      ? null
+      : "このサイクルの支出データを読み込めませんでした。画面を再読み込みするか、しばらく時間をおいてから再度お試しください。";
+  const hasMoreCycleTransactions =
+    cycleTransactionsResult.success &&
+    cycleCountResult.success &&
+    cycleTransactions.length < cycleTransactionTotalCount;
 
   const rangeFromKey = toJstDateString(historyLogicalRange.from);
   const rangeToKey = toJstDateString(historyLogicalRange.to);
@@ -149,6 +171,9 @@ export default async function HistoryPage() {
           })),
         }}
         cycleTransactions={cycleTransactions.map((transaction) => ({ ...transaction, isOptimistic: false }))}
+        cycleExpenseTotal={cycleExpenseTotal}
+        cycleTransactionTotalCount={cycleTransactionTotalCount}
+        initialHasMoreCycleTransactions={hasMoreCycleTransactions}
         cycleListingDescription={cycleListingDescription}
         initialHistoryErrorMessage={initialHistoryErrorMessage}
       />

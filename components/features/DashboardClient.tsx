@@ -11,6 +11,11 @@ import {
   UTILITY_TYPE_OPTIONS,
   type TransactionKind,
 } from "./dashboard/DashboardExpenseSegments";
+import {
+  FUTURE_DAILY_BUDGET_MASKED_HINT_DASHBOARD,
+  FUTURE_DAILY_BUDGET_MASKED_LABEL,
+  shouldMaskFutureDailyBudgetDisplay,
+} from "@/lib/logic/budget-logic";
 import { toNumericOnly } from "@/lib/logic/money-input-format";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 import type { UtilityType } from "@/lib/types/domain";
@@ -59,6 +64,9 @@ export function DashboardClient({
   const remainingToday = useDashboardStore((state) => state.remainingToday);
   const dailyBudgetToday = useDashboardStore((state) => state.dailyBudgetToday);
   const futureDailyBudget = useDashboardStore((state) => state.futureDailyBudget);
+  const daysUntilNextPaydayExcludingToday = useDashboardStore(
+    (state) => state.daysUntilNextPaydayExcludingToday,
+  );
   const todaySpentTotal = useDashboardStore((state) => state.todaySpentTotal);
   const isSubmitting = useDashboardStore((state) => state.isSubmitting);
   const submitErrorMessage = useDashboardStore((state) => state.submitErrorMessage);
@@ -72,6 +80,13 @@ export function DashboardClient({
   const [kindInput, setKindInput] = useState<TransactionKind>("NORMAL");
   const [utilityTypeInput, setUtilityTypeInput] = useState<UtilityType>("ELECTRICITY");
   const [formErrorMessage, setFormErrorMessage] = useState("");
+
+  const maskFutureDailyBudget = shouldMaskFutureDailyBudgetDisplay({
+    daysUntilNextPaydayExcludingToday,
+  });
+  const futureDailyBudgetDisplay = maskFutureDailyBudget
+    ? FUTURE_DAILY_BUDGET_MASKED_LABEL
+    : formatCurrency(futureDailyBudget);
 
   useEffect(() => {
     hydrate(initialState);
@@ -137,7 +152,11 @@ export function DashboardClient({
 
         <div className="grid min-w-0 gap-3 sm:grid-cols-3">
           <MetricCard label="当日の目安予算" value={formatCurrency(dailyBudgetToday)} />
-          <MetricCard label="翌日以降の目安（1日あたり）" value={formatCurrency(futureDailyBudget)} />
+          <MetricCard
+            label="翌日以降の目安予算（1日あたり）"
+            value={futureDailyBudgetDisplay}
+            hint={maskFutureDailyBudget ? FUTURE_DAILY_BUDGET_MASKED_HINT_DASHBOARD : undefined}
+          />
           <MetricCard label="今日の支出合計" value={formatCurrency(todaySpentTotal)} />
         </div>
 
@@ -253,7 +272,7 @@ function ExpenseImpactDetails() {
       <ul className="mt-2 list-inside list-disc space-y-1.5">
         <li>
           <strong className="font-medium text-nokori-text">普通支出</strong>
-          ：「今日の残り」に相当する枠と、翌日以降の1日あたりの目安から差し引かれます。
+          ：「今日の残り」に相当する枠と、翌日以降の目安予算（1日あたり）から差し引かれます。
         </li>
         <li>
           <strong className="font-medium text-nokori-text">特別支出</strong>
@@ -274,22 +293,33 @@ function FirstCycleNotice() {
       <summary className="min-h-11 cursor-pointer select-none py-2 font-medium text-nokori-navy">
         初回サイクルについて
       </summary>
-      <ul className="mt-2 list-inside list-disc space-y-1.5 pb-3 text-nokori-muted">
-        <li>初回サイクルでは、「次の給料日まで使う予算」を「普通支出」としてのみ管理します。</li>
-        <li>光熱費と特別支出の詳細管理は、次の給料日以降の通常サイクルから利用できます。</li>
-        <li>
-          通常サイクルでは、光熱費は概算との差額を残り予算へ反映し、特別支出は貯金総額から直接差し引いて月次貯金ノルマを再計算します。
-        </li>
-      </ul>
+      <div className="mt-2 space-y-2 pb-3 text-nokori-muted">
+        <p>
+          初回サイクルでは「次の給料日まで使う予算」と、ユーザが登録した「普通支出」から日次の目安予算を計算しますが、通常サイクルでは普通支出に加えて選択できる支出種別が増えます。
+        </p>
+        <ul className="list-inside list-disc space-y-1.5">
+          <li>光熱費：ユーザが登録した支出金額と概算の差額を残り予算へ反映します。</li>
+          <li>特別支出：貯金総額から直接差し引いて翌月以降の月次貯金ノルマを再計算します。</li>
+        </ul>
+      </div>
     </details>
   );
 }
 
-function MetricCard({ label, value }: { readonly label: string; readonly value: string }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly hint?: string;
+}) {
   return (
     <div className="rounded-lg border border-nokori-border bg-nokori-surface p-3 shadow-sm">
       <p className="text-xs text-nokori-muted">{label}</p>
       <p className="mt-1 text-lg font-semibold text-nokori-navy">{value}</p>
+      {hint ? <p className="mt-1.5 text-[11px] leading-snug text-nokori-muted">{hint}</p> : null}
     </div>
   );
 }

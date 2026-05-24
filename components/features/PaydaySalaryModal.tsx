@@ -32,7 +32,7 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
 
     const parsed = Number(numericValue);
     if (!Number.isFinite(parsed) || parsed < 1) {
-      setErrorMessage("手取りは1円以上の整数で入力してください。");
+      setErrorMessage("手取り額は1円以上の整数で入力してください。");
       return;
     }
 
@@ -73,15 +73,18 @@ export function PaydaySalaryModal({ salaryPrompt }: PaydaySalaryModalProps) {
     >
       <div className="max-w-md rounded-xl border border-nokori-border bg-nokori-surface p-6 shadow-xl">
         <h2 id="payday-salary-title" className="text-lg font-semibold text-nokori-navy">
-          このサイクルの手取り給料
+          このサイクルの手取り額
         </h2>
-        <p className="mt-2 text-sm text-nokori-muted">
-          給料日の記録として、このサイクルに使う手取り概算を入力してください。予算の基準（月収 − 固定費合計 −
+        <p className="mt-2 text-sm leading-relaxed text-nokori-muted">
+          給料日の記録として、このサイクルに使う手取り額を入力してください。予算の基準（手取り額 − 固定費合計 −
           光熱費概算 − 月次貯金ノルマ）に反映されます。
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-nokori-muted">
+          ボーナスや臨時収入がある月は、通常の手取り額に足した合計額を入力してください。翌月から元の水準に戻す場合は、次の給料日にあらためて入力し直してください。
         </p>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
           <label className="flex flex-col gap-1 text-sm text-nokori-text">
-            <span>手取り（円）</span>
+            <span>手取り額（円）</span>
             <input
               type="text"
               inputMode="numeric"

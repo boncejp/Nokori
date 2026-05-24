@@ -67,28 +67,92 @@ export async function listTransactionsByLogicalMonth(
   return { success: true, data };
 }
 
+function logicalDateRangeKeys(params: {
+  readonly fromLogicalDate: Date;
+  readonly toLogicalDate: Date;
+}): { readonly fromLogicalDateString: string; readonly toLogicalDateString: string } {
+  return {
+    fromLogicalDateString: toJstDateString(params.fromLogicalDate),
+    toLogicalDateString: toJstDateString(params.toLogicalDate),
+  };
+}
+
 export async function listTransactionsByLogicalDateRange(
   supabase: SupabaseClient<Database>,
   params: {
     readonly fromLogicalDate: Date;
     readonly toLogicalDate: Date;
+    readonly limit?: number;
+    readonly offset?: number;
   },
 ): Promise<Result<readonly Transaction[]>> {
-  const fromLogicalDateString = toJstDateString(params.fromLogicalDate);
-  const toLogicalDateString = toJstDateString(params.toLogicalDate);
-  const { data, error } = await supabase
+  const { fromLogicalDateString, toLogicalDateString } = logicalDateRangeKeys(params);
+  let query = supabase
     .from("transactions")
     .select(TRANSACTION_SELECT_COLUMNS)
     .gte("logical_date", fromLogicalDateString)
     .lte("logical_date", toLogicalDateString)
-    .order("logical_date", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("logical_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (params.limit !== undefined) {
+    const offset = params.offset ?? 0;
+    if (offset < 0 || params.limit <= 0) {
+      return { success: false, error: new Error("limit and offset must be valid for pagination") };
+    }
+    query = query.range(offset, offset + params.limit - 1);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return { success: false, error: new Error(error.message) };
   }
 
   return { success: true, data };
+}
+
+export async function countTransactionsByLogicalDateRange(
+  supabase: SupabaseClient<Database>,
+  params: {
+    readonly fromLogicalDate: Date;
+    readonly toLogicalDate: Date;
+  },
+): Promise<Result<number>> {
+  const { fromLogicalDateString, toLogicalDateString } = logicalDateRangeKeys(params);
+  const { count, error } = await supabase
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .gte("logical_date", fromLogicalDateString)
+    .lte("logical_date", toLogicalDateString);
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  return { success: true, data: count ?? 0 };
+}
+
+export async function sumTransactionAmountsByLogicalDateRange(
+  supabase: SupabaseClient<Database>,
+  params: {
+    readonly fromLogicalDate: Date;
+    readonly toLogicalDate: Date;
+  },
+): Promise<Result<number>> {
+  const { fromLogicalDateString, toLogicalDateString } = logicalDateRangeKeys(params);
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount")
+    .gte("logical_date", fromLogicalDateString)
+    .lte("logical_date", toLogicalDateString);
+
+  if (error) {
+    return { success: false, error: new Error(error.message) };
+  }
+
+  const total = data.reduce((sum, row) => sum + row.amount, 0);
+  return { success: true, data: total };
 }
 
 export async function insertOwnTransaction(

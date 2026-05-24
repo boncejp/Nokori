@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getErrorMessageFromResponseBody } from "@/lib/logic/api-response-parsing";
+import { parseHistoryCycleListPage } from "@/lib/logic/history-cycle-list-parsing";
 import type { UtilityType } from "@/lib/types/domain";
 import { useDashboardStore, type DashboardTransaction } from "@/lib/stores/dashboard-store";
 
@@ -19,6 +20,9 @@ type HistoryClientProps = {
     readonly transactions: readonly DashboardTransaction[];
   };
   readonly cycleTransactions: readonly DashboardTransaction[];
+  readonly cycleExpenseTotal: number;
+  readonly cycleTransactionTotalCount: number;
+  readonly initialHasMoreCycleTransactions: boolean;
   /** サーバー算出のサイクル範囲・27:00 ルールの説明（実装の `getHistoryListingLogicalDateRange` と整合） */
   readonly cycleListingDescription: string;
   readonly initialHistoryErrorMessage: string | null;
@@ -73,6 +77,9 @@ function formatKindLabel(transaction: DashboardTransaction): string {
 export function HistoryClient({
   dashboardHydration,
   cycleTransactions,
+  cycleExpenseTotal: initialCycleExpenseTotal,
+  cycleTransactionTotalCount: initialCycleTransactionTotalCount,
+  initialHasMoreCycleTransactions,
   cycleListingDescription,
   initialHistoryErrorMessage,
 }: HistoryClientProps) {
@@ -81,6 +88,12 @@ export function HistoryClient({
   const deleteCommittedTransaction = useDashboardStore((state) => state.deleteCommittedTransaction);
 
   const [transactions, setTransactions] = useState<readonly DashboardTransaction[]>(cycleTransactions);
+  const [cycleExpenseTotal, setCycleExpenseTotal] = useState(initialCycleExpenseTotal);
+  const [cycleTransactionTotalCount, setCycleTransactionTotalCount] = useState(
+    initialCycleTransactionTotalCount,
+  );
+  const [hasMore, setHasMore] = useState(initialHasMoreCycleTransactions);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState("");
 
@@ -91,12 +104,50 @@ export function HistoryClient({
   useEffect(() => {
     queueMicrotask(() => {
       setTransactions(cycleTransactions);
+      setCycleExpenseTotal(initialCycleExpenseTotal);
+      setCycleTransactionTotalCount(initialCycleTransactionTotalCount);
+      setHasMore(initialHasMoreCycleTransactions);
     });
-  }, [cycleTransactions]);
+  }, [
+    cycleTransactions,
+    initialCycleExpenseTotal,
+    initialCycleTransactionTotalCount,
+    initialHasMoreCycleTransactions,
+  ]);
 
-  const cycleExpenseTotal = useMemo(() => {
-    return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-  }, [transactions]);
+  const handleLoadMore = async () => {
+    setActionErrorMessage("");
+    setIsLoadingMore(true);
+
+    try {
+      const response = await fetch(`/api/transactions/cycle?offset=${transactions.length}`);
+      const body: unknown = await response.json();
+
+      if (!response.ok) {
+        const errorMessage =
+          getErrorMessageFromResponseBody(body) ??
+          "追加の一覧を読み込めませんでした。時間をおいて再試行してください。";
+        setActionErrorMessage(errorMessage);
+        return;
+      }
+
+      const page = parseHistoryCycleListPage(body);
+      if (page === null) {
+        setActionErrorMessage(
+          "追加の一覧を表示できませんでした。ページを再読み込みしてからお試しください。",
+        );
+        return;
+      }
+
+      setTransactions((current) => [...current, ...page.transactions]);
+      setCycleTransactionTotalCount(page.totalCount);
+      setHasMore(page.hasMore);
+    } catch {
+      setActionErrorMessage("通信に失敗しました。ネットワークを確認して再試行してください。");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const handleDelete = async (transaction: DashboardTransaction) => {
     const isConfirmed = window.confirm("この支出を削除しますか？");
@@ -105,11 +156,17 @@ export function HistoryClient({
     }
 
     const previousTransactions = transactions;
+    const previousCycleExpenseTotal = cycleExpenseTotal;
+    const previousCycleTransactionTotalCount = cycleTransactionTotalCount;
+    const previousHasMore = hasMore;
+
     setActionErrorMessage("");
     setIsDeletingId(transaction.id);
     setTransactions((currentTransactions) =>
       currentTransactions.filter((currentTransaction) => currentTransaction.id !== transaction.id),
     );
+    setCycleExpenseTotal((current) => current - transaction.amount);
+    setCycleTransactionTotalCount((current) => Math.max(0, current - 1));
 
     try {
       const response = await fetch(`/api/transactions/${transaction.id}`, {
@@ -120,6 +177,9 @@ export function HistoryClient({
       if (!response.ok) {
         const errorMessage = getErrorMessageFromResponseBody(body) ?? "削除に失敗しました。時間をおいて再試行してください。";
         setTransactions(previousTransactions);
+        setCycleExpenseTotal(previousCycleExpenseTotal);
+        setCycleTransactionTotalCount(previousCycleTransactionTotalCount);
+        setHasMore(previousHasMore);
         setActionErrorMessage(errorMessage);
         return;
       }
@@ -129,11 +189,16 @@ export function HistoryClient({
       }
     } catch {
       setTransactions(previousTransactions);
+      setCycleExpenseTotal(previousCycleExpenseTotal);
+      setCycleTransactionTotalCount(previousCycleTransactionTotalCount);
+      setHasMore(previousHasMore);
       setActionErrorMessage("通信に失敗しました。ネットワークを確認して再試行してください。");
     } finally {
       setIsDeletingId(null);
     }
   };
+
+  const showEmptyState = !initialHistoryErrorMessage && cycleTransactionTotalCount === 0;
 
   return (
     <section className="space-y-4 rounded-xl border border-nokori-border bg-nokori-surface p-4 shadow-sm sm:p-6">
@@ -179,12 +244,20 @@ export function HistoryClient({
       ) : null}
       {actionErrorMessage ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{actionErrorMessage}</p> : null}
 
-      <div className="rounded-lg border border-nokori-border bg-nokori-subtle/60 p-4">
-        <p className="text-xs text-nokori-muted">このサイクル内の支出の合計</p>
-        <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(cycleExpenseTotal)}</p>
-      </div>
+      {!initialHistoryErrorMessage ? (
+        <div className="rounded-lg border border-nokori-border bg-nokori-subtle/60 p-4">
+          <p className="text-xs text-nokori-muted">このサイクル内の支出の合計</p>
+          <p className="text-2xl font-semibold text-nokori-navy">{formatCurrency(cycleExpenseTotal)}</p>
+          <p className="mt-1 text-xs text-nokori-muted">
+            表示中: {transactions.length}件
+            {cycleTransactionTotalCount > transactions.length
+              ? `（全${cycleTransactionTotalCount}件・新しい順）`
+              : "（新しい順）"}
+          </p>
+        </div>
+      ) : null}
 
-      {transactions.length === 0 ? (
+      {showEmptyState ? (
         <div className="space-y-3 rounded-lg border border-dashed border-nokori-border px-4 py-8 text-center text-sm text-nokori-muted">
           <p>このサイクル内の支出はまだありません。</p>
           <p>ダッシュボードから支出を登録すると、ここに表示されます。</p>
@@ -195,31 +268,43 @@ export function HistoryClient({
             ダッシュボードへ
           </Link>
         </div>
-      ) : (
-        <ul className="space-y-2">
-          {transactions.map((transaction) => (
-            <li key={transaction.id} className="rounded-lg border border-nokori-border bg-nokori-surface px-4 py-3 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <p className="font-medium text-nokori-navy">{formatCurrency(transaction.amount)}</p>
-                  <p className="text-sm text-nokori-text">{formatKindLabel(transaction)}</p>
-                  <p className="text-xs text-nokori-muted">集計日: {formatLogicalDateJa(transaction.logical_date)}</p>
-                  <p className="text-xs text-nokori-muted">登録日時: {formatCreatedAt(transaction.created_at)}</p>
-                  {transaction.memo ? <p className="text-sm text-nokori-muted">{transaction.memo}</p> : null}
+      ) : !initialHistoryErrorMessage ? (
+        <>
+          <ul className="space-y-2">
+            {transactions.map((transaction) => (
+              <li key={transaction.id} className="rounded-lg border border-nokori-border bg-nokori-surface px-4 py-3 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-nokori-navy">{formatCurrency(transaction.amount)}</p>
+                    <p className="text-sm text-nokori-text">{formatKindLabel(transaction)}</p>
+                    <p className="text-xs text-nokori-muted">集計日: {formatLogicalDateJa(transaction.logical_date)}</p>
+                    <p className="text-xs text-nokori-muted">登録日時: {formatCreatedAt(transaction.created_at)}</p>
+                    {transaction.memo ? <p className="text-sm text-nokori-muted">{transaction.memo}</p> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(transaction)}
+                    disabled={isDeletingId === transaction.id}
+                    className="min-h-11 shrink-0 rounded-md border border-red-300 px-4 py-2.5 text-sm text-red-700 disabled:opacity-60"
+                  >
+                    {isDeletingId === transaction.id ? "削除中..." : "削除"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(transaction)}
-                  disabled={isDeletingId === transaction.id}
-                  className="min-h-11 shrink-0 rounded-md border border-red-300 px-4 py-2.5 text-sm text-red-700 disabled:opacity-60"
-                >
-                  {isDeletingId === transaction.id ? "削除中..." : "削除"}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+              </li>
+            ))}
+          </ul>
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="min-h-11 w-full rounded-md border border-nokori-border bg-nokori-surface px-4 py-2.5 text-sm font-medium text-nokori-navy shadow-sm transition hover:bg-nokori-subtle disabled:opacity-60"
+            >
+              {isLoadingMore ? "読み込み中..." : "さらに表示"}
+            </button>
+          ) : null}
+        </>
+      ) : null}
     </section>
   );
 }
