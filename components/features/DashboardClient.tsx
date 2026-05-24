@@ -12,6 +12,7 @@ import {
   type TransactionKind,
 } from "./dashboard/DashboardExpenseSegments";
 import {
+  FUTURE_DAILY_BUDGET_MASKED_HINT_DASHBOARD,
   FUTURE_DAILY_BUDGET_MASKED_LABEL,
   shouldMaskFutureDailyBudgetDisplay,
 } from "@/lib/logic/budget-logic";
@@ -154,11 +155,7 @@ export function DashboardClient({
           <MetricCard
             label="翌日以降の目安予算（1日あたり）"
             value={futureDailyBudgetDisplay}
-            hint={
-              maskFutureDailyBudget
-                ? "サイクル最終日のため、翌日以降の日割りは給料日に手取りを入力すると表示されます。"
-                : undefined
-            }
+            hint={maskFutureDailyBudget ? FUTURE_DAILY_BUDGET_MASKED_HINT_DASHBOARD : undefined}
           />
           <MetricCard label="今日の支出合計" value={formatCurrency(todaySpentTotal)} />
         </div>
@@ -275,7 +272,7 @@ function ExpenseImpactDetails() {
       <ul className="mt-2 list-inside list-disc space-y-1.5">
         <li>
           <strong className="font-medium text-nokori-text">普通支出</strong>
-          ：「今日の残り」に相当する枠と、翌日以降の1日あたりの目安から差し引かれます。
+          ：「今日の残り」に相当する枠と、翌日以降の目安予算（1日あたり）から差し引かれます。
         </li>
         <li>
           <strong className="font-medium text-nokori-text">特別支出</strong>

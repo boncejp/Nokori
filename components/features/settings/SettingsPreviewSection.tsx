@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  FUTURE_DAILY_BUDGET_MASKED_HINT_SETTINGS,
   FUTURE_DAILY_BUDGET_MASKED_LABEL,
 } from "@/lib/logic/budget-logic";
 import type { SettingsBudgetPreviewResult } from "@/lib/logic/settings-preview-simulation";
@@ -30,7 +31,7 @@ export function SettingsPreviewSection(props: {
       ) : (
         <p className="mt-2 text-sm text-nokori-muted">
           <strong className="text-nokori-text">通常サイクル:</strong>{" "}
-          収入・固定費合計・光熱費概算・達成条件の変更案がプレビューに反映されます。日次の母数は、余剰金処理が厳格のときは基準サイクル予算、ゆとりのときは給料日リセットで確定したサイクル枠（繰り越し込み）です。貯金総額と今日までの確定支出・当日の支出は実データのままです。
+          手取り額・固定費合計・光熱費概算・達成条件の変更案がプレビューに反映されます。日次の母数は、余剰金処理が厳格のときは基準サイクル予算、ゆとりのときは給料日リセットで確定したサイクル枠（繰り越し込み）です。貯金総額と今日までの確定支出・当日の支出は実データのままです。
         </p>
       )}
 
@@ -50,7 +51,7 @@ export function SettingsPreviewSection(props: {
           }`}
         >
           <div className="rounded-md border border-nokori-border bg-nokori-surface px-3 py-2 shadow-sm">
-            <dt className="text-xs font-medium text-nokori-muted">当日予算（目安）</dt>
+            <dt className="text-xs font-medium text-nokori-muted">当日の目安予算</dt>
             <dd className="text-lg font-semibold tabular-nums text-nokori-navy">
               {formatCurrencyYen(previewMetrics.dailyBudgetToday)}
             </dd>
@@ -64,7 +65,7 @@ export function SettingsPreviewSection(props: {
             </dd>
             {previewMetrics.maskFutureDailyBudget ? (
               <p className="mt-1 text-[11px] leading-snug text-nokori-muted">
-                サイクル最終日のため、翌日以降は給料日に手取りを入力すると表示されます。
+                {FUTURE_DAILY_BUDGET_MASKED_HINT_SETTINGS}
               </p>
             ) : null}
           </div>

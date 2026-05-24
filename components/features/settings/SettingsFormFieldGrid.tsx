@@ -79,13 +79,13 @@ export function SettingsFormFieldGrid(props: {
       ) : null}
       {isFirstCycle ? null : (
         <NumberField
-          label="月収（手取り概算）"
+          label="月収（手取り額）"
           name="monthly_income"
           value={formValues.monthly_income}
           onChange={handleChange}
           thousands
           placeholder="例: 300,000"
-          helperText="このサイクルで使う手取りの目安です。ボーナスなど臨時収入がある月は、ここに含めた合計額を入力してください。"
+          helperText="このサイクルで使う手取り額です。ボーナスなど臨時収入がある月は、ここに含めた合計額を入力してください。"
         />
       )}
       <NumberField
