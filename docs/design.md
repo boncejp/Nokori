@@ -34,7 +34,7 @@
 | `target_anchor_logical_date` | date | 期間計算の起点となる論理日付（オンボーディング完了日） |
 | `payday` | int | 給料日（1〜31） |
 | `payday_rule` | enum ('BEFORE', 'AFTER', 'FIXED') | 土日祝の挙動 |
-| `monthly_income` | int | 月収手取り概算。オンボ初回保存では **0** とし、通常サイクル以降は給料日モーダルや設定で更新する |
+| `monthly_income` | int | 月収（手取り額）。オンボ初回保存では **0** とし、通常サイクル以降は給料日モーダルや設定で更新する |
 | `fixed_costs` | int | 固定費合計 |
 | `estimated_electricity` | int | 電気代概算 |
 | `estimated_gas` | int | ガス代概算 |
@@ -42,10 +42,10 @@
 | `initial_total_assets` | int | オンボーディング時点の**現在の全財産**（要件定義書の用語に一致） |
 | `current_total_savings` | int | **貯金総額（資産側）**。**オンボーディング初回保存時のみ** `initial_total_assets - initial_budget` で初期化する（§4.8）。設定更新のたびにこの式で上書きしない |
 | `surplus_mode` | enum ('STRICT', 'YUTORI') | **通常サイクル（2回目以降）**の月次余剰金処理モード。初回サイクル締めでは使わない |
-| `initial_budget` | int | **初回サイクル専用。** ユーザー入力の「次の給料日まで使う予算」。初回サイクル締めでのみ参照する。通常サイクルの予算計算には使わない。 |
+| `initial_budget` | int | **初回サイクル専用。** ユーザー入力の「次の給料日まで使う予算」（初回サイクルで使う生活費の総額。臨時収入は当該欄の更新で反映）。初回サイクル締めでのみ参照する。通常サイクルの予算計算には使わない。 |
 | `yutori_carryover` | int | **通常サイクル YUTORI 用の繰り越し額。** 前サイクルの余剰金。STRICT リセット・初回サイクル締め時は 0 にリセット。通常サイクルの日次予算母数 = `baseCycleBudget + yutori_carryover`（STRICT では `yutori_carryover` を 0 として計算）。設定 PATCH では上書きしない。 |
 | `last_monthly_reset_logical_date` | date nullable | 直近の月次リセット実行日（冪等性用） |
-| `last_salary_cycle_logical_date` | date nullable | 手取り給料を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
+| `last_salary_cycle_logical_date` | date nullable | 手取り額を最後に確定したサイクル開始日（給料日＝論理日の当日モーダル制御用） |
 | `start_concept_completed_at` | timestamptz nullable | 初回コンセプト画面（`/start`）完了時刻。NULL の間はメイン `(app)` へ入場前に同画面へ誘導する |
 | `created_at` | timestamptz | |
 | `updated_at` | timestamptz | |
@@ -264,8 +264,16 @@ const D_future =
   / daysUntilNextPayday({ includeToday: false });
 ```
 
-- `remainingCycleBudget`（通常サイクル）: **STRICT** では基準サイクル予算（月収 − 固定費 − 光熱費概算 − 月次貯金ノルマ）から、前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）に加え光熱費実額との差額調整（§4.3）を織り込んだ残りを母数とする。**YUTORI** では `baseCycleBudget + yutori_carryover`（繰り越し込み）から同様に差し引く（`yutori_carryover` は §4.5 の月次リセットで設定される）。いずれも**特別支出**（内部 `type = 'SPECIAL'`）の金額は母数に含めない。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
+- `remainingCycleBudget`（通常サイクル）: **STRICT** では基準サイクル予算（手取り額 − 固定費 − 光熱費概算 − 月次貯金ノルマ）から、前日までの確定済み**普通支出**（内部 `type = 'NORMAL'`）に加え光熱費実額との差額調整（§4.3）を織り込んだ残りを母数とする。**YUTORI** では `baseCycleBudget + yutori_carryover`（繰り越し込み）から同様に差し引く（`yutori_carryover` は §4.5 の月次リセットで設定される）。いずれも**特別支出**（内部 `type = 'SPECIAL'`）の金額は母数に含めない。`utilityDeltaTotal` は上式のとおり分子側で併記し、二重計上にならないよう実装で単一ソースに集約する。
 - 支出登録のたびに `remainingToday` と `D_future` をZustandストアで即時更新し、UIに反映する。
+
+#### 4.2.3 翌日以降の目安予算の UI 表示（`D_future` のマスク）
+
+計算上の `D_future` は §4.2.1 / §4.2.2 のとおり算出するが、**当日を除く残り日数が 0**（サイクル最終日＝次の給料日の前日）のときは、翌日から新サイクルに入り手取り額が未確定のため、ユーザー向けの「翌日以降の目安予算」は数値ではなく **—** を表示する。
+
+- **判定:** `shouldMaskFutureDailyBudgetDisplay({ daysUntilNextPaydayExcludingToday })`（`daysUntilNextPaydayExcludingToday === 0`）。
+- **実装:** `lib/logic/budget/future-daily-budget-display.ts`。定数 `FUTURE_DAILY_BUDGET_MASKED_LABEL`（`—`）、補足文 `FUTURE_DAILY_BUDGET_MASKED_HINT_DASHBOARD` / `FUTURE_DAILY_BUDGET_MASKED_HINT_SETTINGS`。
+- **適用箇所:** ダッシュボード（`DashboardClient`）、設定の保存前プレビュー（`SettingsPreviewSection`）。ラベルはそれぞれ「翌日以降の目安予算（1日あたり）」「翌日以降の目安予算」。
 
 ### 4.3 光熱費の予算反映（通常サイクルのみ）
 
@@ -368,9 +376,11 @@ function processMonthlyReset(
 - **Welcome（初回のみ）:** ログイン後・オンボーディング前の `/welcome`。プロダクトコンセプトの短いコピーとリッチな（CSS ベースの）入場アニメーション。完了状態は `user_welcome` に永続化し、再ログインでは表示しない。
 - **Start concept（初回のみ）:** オンボーディング完了直後の `/start`。運用イメージ（サイクル・初回日割り・入力の勧め）を少し踏み込んで伝え、完了は `profiles.start_concept_completed_at` に記録する。画面下部に PWA / ホーム画面追加の短い案内を置く（過度なモーダルは避ける）。
 - **Alert UI:** `remainingToday < 0`（今日の残り予算が 0 未満）をトリガーに、**「今日の残り予算」の表示**と短い警告文を赤系で強調する。レイアウト全体を赤系のテーマや背景で覆い替える要件ではない（当該表示に限定。要件定義書 §3.2 と整合）。
-- **Dashboard（初回サイクル）:** 普通支出のみ入力可能。光熱費・特別支出トグルは非表示または無効化。要件定義書に記載の「初回サイクル用説明」テキストを表示。
-- **Dashboard（通常サイクル）:** 普通支出 / 特別支出 / 光熱費のトグルを有効化。
-- **Settings:** **月次貯金ノルマ**を表示フィールドとして追加。**編集不可**。**初回サイクル中は非表示**、**2回目以降の通常サイクルでのみ表示**。
+- **Dashboard（初回サイクル）:** 普通支出のみ入力可能。光熱費・特別支出トグルは非表示または無効化。折りたたみの「初回サイクルについて」で初回と通常の支出種別の違いを説明。
+- **Dashboard（通常サイクル）:** 普通支出 / 特別支出 / 光熱費のトグルを有効化。給料日当日のみ手取り額入力モーダル（初回サイクル中は出さない）。
+- **Dashboard（メトリクス）:** 「当日の目安予算」「翌日以降の目安予算（1日あたり）」「今日の支出合計」。サイクル最終日は翌日以降を §4.2.3 のとおりマスク。
+- **History:** サイクル内一覧は新しい順。`HISTORY_CYCLE_LIST_PAGE_SIZE`（50）件ずつ表示し、`GET /api/transactions/cycle` で Load more。合計金額はサイクル全件の `sumTransactionAmountsByLogicalDateRange`。
+- **Settings:** **月次貯金ノルマ**を表示フィールドとして追加。**編集不可**。**初回サイクル中は非表示**、**2回目以降の通常サイクルでのみ表示**。**月収（手取り額）**は通常サイクルのみ編集可。初回サイクル中のみ「次の給料日まで使う予算」を編集可。保存前プレビューは §4.2.3 を含む。
 - **楽観的UI更新:** 支出登録時、DBレスポンスを待たずにZustandストアを先行更新し、ゼロレイテンシ体験を実現する。失敗時はロールバック。
 - **PWA:** `next-pwa` を導入。MVPではアセットキャッシュとホーム画面追加のみ。Service WorkerによるオフラインDBキューイングはV2。
 
@@ -409,6 +419,7 @@ function processMonthlyReset(
 | 5 | STRICT / YUTORI モードによる**通常サイクル**の給料日リセット後の挙動の差異 |
 | 6 | 初回サイクル中は光熱費・特別支出が登録できない（UIまたはAPI） |
 | 7 | 初回サイクル終了リセット後、通常サイクルのトグル・ノルマ表示が有効になる |
+| 8 | サイクル最終日の翌日以降目安予算が — 表示されること。履歴の Load more（50 件）とサイクル全件合計の整合 |
 
 ---
 
@@ -423,5 +434,5 @@ function processMonthlyReset(
 | 3. Logic | 論理日付取得、給料日算出、**初回/通常のフェーズ判定**、予算再計算関数の実装（Vitestによるテスト先行） |
 | 4. UI – Onboarding | 現在の全財産・次の給料日まで使う予算を含む全オンボーディング画面（手取りは含めない）、`initial_total_assets` の保存。`monthly_income` は初回 0 |
 | 5. UI – Dashboard | 金額入力は **現状（MVP）** テキスト系（`inputMode="numeric"` 等）の数値入力。**専用テンキー UI** は将来オプションとして検討。トグル（フェーズにより切替）・リアルタイム表示・翌日予算プレビュー・初回説明 |
-| 6. UI – History / Settings | スワイプ削除・リアクティブな予算復元。設定は通常サイクル時のみ月次貯金ノルマ表示（読み取り専用）を含む |
+| 6. UI – History / Settings | 履歴は新しい順・50 件 Load more・サイクル全件合計。設定は手取り額・保存前プレビュー・通常サイクル時のみ月次貯金ノルマ表示（読み取り専用）を含む |
 | 7. Integration | Vercel への本番接続（環境変数・Supabase 疎通・本番ブランチでのビルド確認）。GitHub Actions は PR の Lint / テスト等を必要に応じ追加。GCP（Cloud Run）への移行は別フェーズで検討 |
